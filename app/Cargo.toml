@@ -1,0 +1,11 @@
+[package]
+name = "marvk-chess-app"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+marvk-chess-board = { path = "../board" }
+marvk-chess-core = { path = "../core" }
+
+[profile.release]
+debug = true

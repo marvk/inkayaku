@@ -1,0 +1,12 @@
+[package]
+name = "marvk-chess-board"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+marvk-chess-core = { path = "../core" }
+rand = "0.8.5"
+lazy_static = "1.4.0"
+
+[profile.bench]
+debug = true
