@@ -19,19 +19,18 @@ pub struct Configuration {
 }
 
 impl Configuration {
-    #[inline(always)]
+    // #[inline(always)]
     pub fn get_attacks(&self, occupancy: u64) -> u64 {
         self.attacks[self.hash(occupancy)]
     }
 
-    #[inline(always)]
+    // #[inline(always)]
     fn hash(&self, occupancy: u64) -> usize {
         hash(self.mask, self.hash_shift, self.hash_mask, self.magic, occupancy)
     }
 }
 
 pub struct ConfigurationGenerator {
-    piece: Piece,
     square: Square,
     directions: [Direction; 4],
     relevant_squares: Vec<Square>,
@@ -74,7 +73,7 @@ impl ConfigurationGenerator {
             for set_bits in 0..num_possible_configurations {
                 let mut current = 0;
 
-                for (hash_index, relevant_square) in (&relevant_squares).iter().enumerate() {
+                for (hash_index, relevant_square) in relevant_squares.iter().enumerate() {
                     let mask = 1 << hash_index;
                     if (set_bits & mask) != 0 {
                         current |= relevant_square.mask
@@ -88,7 +87,6 @@ impl ConfigurationGenerator {
         };
 
         Self {
-            piece,
             square,
             directions,
             relevant_squares,
@@ -205,7 +203,7 @@ impl<T: Rng> MagicGenerator<T> {
     }
 }
 
-#[inline(always)]
+// #[inline(always)]
 fn hash(mask: u64, hash_shift: u32, hash_mask: u64, magic: u64, occupancy: u64) -> usize {
     let i1 = occupancy & mask;
     let i2 = i1.overflowing_mul(magic).0;

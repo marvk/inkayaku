@@ -241,22 +241,28 @@ pub const RANK_6_OCCUPANCY: OccupancyBits = A6_MASK | B6_MASK | C6_MASK | D6_MAS
 pub const RANK_7_OCCUPANCY: OccupancyBits = A7_MASK | B7_MASK | C7_MASK | D7_MASK | E7_MASK | F7_MASK | G7_MASK | H7_MASK;
 pub const RANK_8_OCCUPANCY: OccupancyBits = A8_MASK | B8_MASK | C8_MASK | D8_MASK | E8_MASK | F8_MASK | G8_MASK | H8_MASK;
 
-#[inline(always)]
+pub const CASTLE_MOVE_TRUE_MASK: u64 = CASTLE_MOVE_MASK;
+pub const CASTLE_MOVE_FALSE_MASK: u64 = 0;
+
+pub const EN_PASSANT_ATTACK_TRUE_MASK: u64 = EN_PASSANT_ATTACK_MASK;
+pub const EN_PASSANT_ATTACK_FALSE_MASK: u64 = 0;
+
+// #[inline(always)]
 pub fn square_mask_from_index(file_index: u32, rank_index: u32) -> SquareMaskBits {
     1 << square_shift_from_index(file_index, rank_index)
 }
 
-#[inline(always)]
+// #[inline(always)]
 pub fn square_shift_from_index(file_index: u32, rank_index: u32) -> SquareShiftBits {
     to_square_index_from_indices(file_index as usize, rank_index as usize) as SquareShiftBits
 }
 
-#[inline(always)]
+// #[inline(always)]
 pub fn square_mask_from_fen(fen: &str) -> SquareMaskBits {
     1 << square_shift_from_fen(fen)
 }
 
-#[inline(always)]
+// #[inline(always)]
 pub fn square_shift_from_fen(fen: &str) -> SquareShiftBits {
     assert_eq!(fen.len(), 2, "Failed for {}", fen);
     let mut chars = fen.chars();

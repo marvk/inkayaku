@@ -2,7 +2,7 @@ extern crate core;
 
 use std::fmt::{Debug, Formatter};
 use std::io::Read;
-use std::process::{Child, Command, Stdio};
+use std::process::{Command, Stdio};
 use std::str::from_utf8;
 use std::thread::sleep;
 use std::time::Duration;
@@ -107,7 +107,7 @@ impl ReferenceEngine {
 mod perft_debug {
     use std::collections::HashSet;
 
-    use marvk_chess_board::{move_to_san_reduced, occupancy_to_string};
+    use marvk_chess_board::{move_to_san_reduced};
     use marvk_chess_board::board::{Bitboard, Move};
     use marvk_chess_core::fen::Fen;
 
@@ -118,7 +118,7 @@ mod perft_debug {
     #[test]
     #[ignore]
     fn with_reference_engine() {
-        compare_perft("r2q1rk1/pP1p2pp/Q4n2/bbp1p3/Np6/1B3NBn/pPPP1PPP/R3K2R b KQ - 0 1", 4);
+        compare_perft("r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq -", 4);
     }
 
     #[test]
@@ -126,8 +126,11 @@ mod perft_debug {
     fn print_moves() {
         let mut bitboard = Bitboard::new(&Fen::new("4k3/8/8/8/8/8/8/R3K2R w KQ - 0 1").unwrap());
 
-        for x in bitboard.generate_pseudo_legal_moves() {
-            bitboard.make(Move(x.0));
+        let mut moves = Vec::new();
+        bitboard.generate_pseudo_legal_moves_with_buffer(&mut moves);
+
+        for x in moves {
+            bitboard.make(x);
 
             if bitboard.is_valid() {
                 move_to_san_reduced(&x);
@@ -220,145 +223,34 @@ mod perft_debug {
     #[ignore]
     fn simple() {
         let fen = Fen::new("r3k2r/p1ppqpb1/bnN1pnp1/3P4/1p2P3/2N2Q1p/PPPBBPPP/R3K2R b KQkq - 1 1").unwrap();
-        Bitboard::new(&fen).generate_pseudo_legal_moves();
-    }
-
-    #[test]
-    #[ignore]
-    fn asd() {
-        let fen = "r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq -";
-
-        let mut bitboard = Bitboard::new(&Fen::new(fen).unwrap());
-
-        let x = bitboard.generate_pseudo_legal_moves().into_iter().find(|mv| move_to_san_reduced(mv) == "e5c6").unwrap();
-
-        println!("{}", x);
-
-        bitboard.make(x);
-
-        println!("{}", bitboard);
-
-        let mut count = 0;
-        let mut expect: HashSet<&str> = ["b4b3", "e6e5", "g6g5", "d7d6", "h3g2", "e6d5", "d7c6", "b4c3", "b6a4", "b6c4", "b6d5", "b6c8", "f6e4", "f6g4", "f6d5", "f6h5", "f6h7", "f6g8", "a6e2", "a6d3", "a6c4", "a6b5", "a6b7", "a6c8", "g7h6", "g7f8", "a8b8", "a8c8", "a8d8", "h8h4", "h8h5", "h8h6", "h8h7", "h8f8", "h8g8", "e7c5", "e7d6", "e7d8", "e7f8", "e8g8", "e8f8", ].try_into().unwrap();
-
-        for x in bitboard.generate_pseudo_legal_moves() {
-            bitboard.make(Move(x.0));
-
-            if bitboard.is_valid() {
-                count += 1;
-
-                let string = move_to_san_reduced(&x);
-                if !expect.remove(string.as_str()) {
-                    println!("NOT FOUND: {}", string);
-                } else {
-                    println!("{}", string);
-                }
-            } else {
-                println!("INVALID: {}", move_to_san_reduced(&x));
-            }
-            bitboard.unmake(x);
-        }
-
-        println!("{:?}", expect);
-        println!("cnt. {}", count);
-    }
-
-
-    #[test]
-    #[ignore]
-    fn make_issue() {
-        let fen = &Fen::new("r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq -").unwrap();
-        let mut board = Bitboard::new(fen);
-        let original = Bitboard::new(fen);
-
-        println!("{}", occupancy_to_string(64739317792112640));
-        println!("{}", occupancy_to_string(65020788473856000));
-
-        let mut count = 0;
-
-        for x in board.generate_pseudo_legal_moves() {
-            board.make(Move(x.0));
-            if board.is_valid() {
-                println!("{}", move_to_san_reduced(&x));
-                count += 1;
-            }
-            board.unmake(Move(x.0));
-
-            println!();
-            println!("{}", occupancy_to_string(board.white.pawns));
-            println!("{}", occupancy_to_string(original.white.pawns));
-            println!("----");
-            assert_eq!(board, original, "Issue with move {}", move_to_san_reduced(&x));
-        }
-        println!("{}", count);
-    }
-
-    #[test]
-    #[ignore]
-    fn perft() {
-        let fen = "r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq -";
-
-        let mut expect: HashSet<&str> = ["f4f3", "d6d5", "c7c6", "c7c5", "h5b5", "h5c5", "h5d5", "h5e5", "h5f5", "h5g5", "h5h6", "h5h7", "h5h8", "h4g3", "h4h3", "h4g4", "h4g5", ].try_into().unwrap();
-
-        let mut board = Bitboard::new(&Fen::new(fen).unwrap());
-
-        println!("{}", board);
-
-        let mut outer_count = 0;
-        for mv in board.generate_pseudo_legal_moves() {
-            board.make(Move(mv.0));
-
-
-            if board.is_valid() {
-                outer_count += 1;
-
-                let mut count = 0;
-                let moves2 = board.generate_pseudo_legal_moves();
-                for mv2 in moves2 {
-                    board.make(Move(mv2.0));
-
-                    if board.is_valid() {
-                        count += 1;
-                    }
-
-                    board.unmake(mv2);
-                }
-                println!("{}: {}", move_to_san_reduced(&mv), count);
-
-
-                // let string = move_to_san_reduced(&mv);
-                // println!("{}", string);
-                // if !expect.remove(string.as_str()) {
-                //     println!("NOT FOUND: {}", string);
-                // }
-            }
-
-            board.unmake(mv);
-        }
-
-        println!("num: {}", outer_count);
-        println!("{:?}", expect);
+        Bitboard::new(&fen).generate_pseudo_legal_moves_with_buffer(&mut Vec::new());
     }
 }
 
 #[cfg(test)]
 mod perft {
-    use std::collections::HashSet;
-    use std::time::SystemTime;
     use std::usize;
+    use std::time::SystemTime;
 
-    use marvk_chess_board::{move_to_san_reduced, occupancy_to_string};
     use marvk_chess_board::board::{Bitboard, Move};
     use marvk_chess_core::fen::Fen;
 
     use crate::{expect, PerftResult};
 
-    const LIMIT: u64 = 5_000_000_000;
+    const LIMIT: u64 = 200_000_000;
 
     #[test]
     fn run_all() {
         perft1();
 
+        println!("a");
+
+        loop {
+            time();
+        }
+    }
+
+    fn time() {
         let start = SystemTime::now();
 
         perft1();
@@ -485,30 +377,32 @@ mod perft {
                 .into_iter()
                 .map(|index| {
                     let mut result = PerftResult::new();
-                    _run_perft_recursive(&mut board, &mut result, index);
+                    _run_perft_recursive(&mut board, &mut result, &mut Vec::new(), index);
                     result
                 })
                 .collect::<Vec<_>>();
 
-        assert_eq!(actual, expect.iter().cloned().take(n).collect::<Vec<_>>());
+        assert_eq!(actual, expect.iter().cloned().take(n).collect::<Vec<_>>(), "Failed for {}", fen_string);
     }
 
-    fn _run_perft_recursive(board: &mut Bitboard, result: &mut PerftResult, current_depth: usize) {
+    fn _run_perft_recursive(board: &mut Bitboard, result: &mut PerftResult, buffer: &mut Vec<Move>, current_depth: usize) {
         if current_depth == 0 {
             result.nodes += 1;
             return;
         }
 
-        let moves = board.generate_pseudo_legal_moves();
+        board.generate_pseudo_legal_moves_with_buffer(buffer);
 
-        for mv in moves.into_iter() {
-            board.make(Move(mv.0));
+        let mut next_buffer = Vec::new();
+        for mv in buffer {
+            board.make(*mv);
 
             if board.is_valid() {
-                _run_perft_recursive(board, result, current_depth - 1);
+                _run_perft_recursive(board, result, &mut next_buffer, current_depth - 1);
+                next_buffer.clear();
             }
 
-            board.unmake(Move(mv.0));
+            board.unmake(*mv);
         }
     }
 }

@@ -1,14 +1,13 @@
 use std::char::from_digit;
-use std::fmt::{Debug, Display, Formatter, write};
+use std::fmt::{Debug, Display, Formatter};
 
 use marvk_chess_core::constants::color::Color;
 use marvk_chess_core::constants::colored_piece::ColoredPiece;
 use marvk_chess_core::constants::piece::Piece;
 use marvk_chess_core::constants::square::Square;
-use marvk_chess_core::constants::to_square_index_from_indices;
 use marvk_chess_core::fen::Fen;
 
-use crate::{highest_one_bit, move_to_san_reduced, occupancy_to_string, piece_to_string, square_to_string};
+use crate::{mask_and_shift_from_lowest_one_bit, move_to_san_reduced, piece_to_string, square_to_string};
 use crate::board::constants::*;
 use crate::board::precalculated::magic::{BISHOP_MAGICS, Magics, ROOK_MAGICS};
 use crate::board::precalculated::nonmagic::{BLACK_PAWN_NONMAGICS, KING_NONMAGICS, KNIGHT_NONMAGICS, Nonmagics, WHITE_PAWN_NONMAGICS};
@@ -16,7 +15,7 @@ use crate::board::precalculated::nonmagic::{BLACK_PAWN_NONMAGICS, KING_NONMAGICS
 pub mod constants;
 mod precalculated;
 
-#[derive(Eq, PartialEq, Hash)]
+#[derive(Eq, PartialEq, Hash, Copy, Clone)]
 pub struct Move(pub u64);
 
 impl Move {
@@ -66,9 +65,9 @@ impl Move {
     #[inline(always)]
     pub fn set_opponent_lost_queen_side_castle(&mut self) { self.0 |= OPPONENT_LOST_QUEEN_SIDE_CASTLE_MASK }
     #[inline(always)]
-    pub fn set_castle_move(&mut self) { self.0 |= CASTLE_MOVE_MASK }
+    pub fn set_castle_move(&mut self, value: u64) { self.0 |= value }
     #[inline(always)]
-    pub fn set_en_passant_attack(&mut self) { self.0 |= EN_PASSANT_ATTACK_MASK }
+    pub fn set_en_passant_attack(&mut self, value: u64) { self.0 |= value }
     #[inline(always)]
     pub fn set_source_square(&mut self, value: SquareShiftBits) { self.0 |= (value as u64) << SOURCE_SQUARE_SHIFT }
     #[inline(always)]
@@ -76,7 +75,7 @@ impl Move {
     #[inline(always)]
     pub fn set_halfmove_reset(&mut self, value: u64) { self.0 |= value << HALFMOVE_RESET_SHIFT }
     #[inline(always)]
-    pub fn set_previous_halfmove(&mut self, value: u64) { self.0 |= value << PREVIOUS_HALFMOVE_SHIFT }
+    pub fn set_previous_halfmove(&mut self, value: u32) { self.0 |= (value << PREVIOUS_HALFMOVE_SHIFT) as u64 }
     #[inline(always)]
     pub fn set_previous_en_passant_square(&mut self, value: SquareShiftBits) { self.0 |= (value as u64) << PREVIOUS_EN_PASSANT_SQUARE_SHIFT }
     #[inline(always)]
@@ -229,29 +228,31 @@ impl Bitboard {
 // Move Generation
 impl Bitboard {
     pub fn generate_pseudo_legal_moves(&self) -> Vec<Move> {
-        let (active, passive) = self.get_active_and_passive();
+        let mut buffer = Vec::new();
+        self.generate_pseudo_legal_moves_with_buffer(&mut buffer);
+        buffer
+    }
 
-        let mut result: Vec<Move> = Vec::new();
+    pub fn generate_pseudo_legal_moves_with_buffer(&self, result: &mut Vec<Move>) {
+        let (active, passive) = self.get_active_and_passive();
 
         let active_occupancy = active.occupancy();
         let passive_occupancy = passive.occupancy();
         let full_occupancy = active_occupancy | passive_occupancy;
 
-        self.sliding_attacks(&mut result, active.queens, active_occupancy, full_occupancy, &ROOK_MAGICS, QUEEN);
-        self.sliding_attacks(&mut result, active.queens, active_occupancy, full_occupancy, &BISHOP_MAGICS, QUEEN);
+        self.sliding_attacks(result, active.queens, active_occupancy, full_occupancy, &ROOK_MAGICS, QUEEN);
+        self.sliding_attacks(result, active.queens, active_occupancy, full_occupancy, &BISHOP_MAGICS, QUEEN);
 
-        self.sliding_attacks(&mut result, active.bishops, active_occupancy, full_occupancy, &BISHOP_MAGICS, BISHOP);
-        self.sliding_attacks(&mut result, active.rooks, active_occupancy, full_occupancy, &ROOK_MAGICS, ROOK);
+        self.sliding_attacks(result, active.bishops, active_occupancy, full_occupancy, &BISHOP_MAGICS, BISHOP);
+        self.sliding_attacks(result, active.rooks, active_occupancy, full_occupancy, &ROOK_MAGICS, ROOK);
 
-        self.single_attacks(&mut result, active.knights, active_occupancy, &KNIGHT_NONMAGICS, KNIGHT);
-        self.single_attacks(&mut result, active.kings, active_occupancy, &KING_NONMAGICS, KING);
+        self.single_attacks(result, active.knights, active_occupancy, &KNIGHT_NONMAGICS, KNIGHT);
+        self.single_attacks(result, active.kings, active_occupancy, &KING_NONMAGICS, KING);
 
-        self.pawn_attacks(&mut result, active.pawns, active_occupancy, passive_occupancy);
-        self.pawn_moves(&mut result, active.pawns, full_occupancy);
+        self.pawn_attacks(result, active.pawns, active_occupancy, passive_occupancy);
+        self.pawn_moves(result, active.pawns, full_occupancy);
 
-        self.castle_moves(&mut result, full_occupancy);
-
-        result
+        self.castle_moves(result, full_occupancy);
     }
 
 
@@ -265,9 +266,9 @@ impl Bitboard {
         piece: PieceBits,
     ) {
         while piece_occupancy != 0 {
-            let source_square_mask = highest_one_bit(piece_occupancy);
+            let (source_square_mask, source_square_shift) = mask_and_shift_from_lowest_one_bit(piece_occupancy);
             piece_occupancy &= !source_square_mask;
-            let source_square_shift = source_square_mask.trailing_zeros();
+
             let attack_occupancy = magics.get_attacks(source_square_shift, full_occupancy) & !active_occupancy;
 
             self.generate_attacks(result, source_square_shift, attack_occupancy, piece);
@@ -283,11 +284,10 @@ impl Bitboard {
         piece: PieceBits,
     ) {
         while piece_occupancy != 0 {
-            let source_square_mask = highest_one_bit(piece_occupancy);
+            let (source_square_mask, source_square_shift) = mask_and_shift_from_lowest_one_bit(piece_occupancy);
             piece_occupancy &= !source_square_mask;
-            let source_square_shift = source_square_mask.trailing_zeros();
-            let attack_occupancy = nonmagics.get_attacks(source_square_shift) & !active_occupancy;
 
+            let attack_occupancy = nonmagics.get_attacks(source_square_shift) & !active_occupancy;
             self.generate_attacks(result, source_square_shift, attack_occupancy, piece);
         }
     }
@@ -297,35 +297,36 @@ impl Bitboard {
         let pawn_attacks: &Nonmagics = if self.is_white_turn() { &WHITE_PAWN_NONMAGICS } else { &BLACK_PAWN_NONMAGICS };
 
         while pawn_occupancy != 0 {
-            let source_square_mask = highest_one_bit(pawn_occupancy);
+            let (source_square_mask, source_square_shift) = mask_and_shift_from_lowest_one_bit(pawn_occupancy);
             pawn_occupancy &= !source_square_mask;
-            let source_square_shift = source_square_mask.trailing_zeros();
 
             let attack_occupancy =
                 pawn_attacks.get_attacks(source_square_shift)
                     & (passive_occupancy | ((1 << self.en_passant_square_shift) & !(RANK_1_OCCUPANCY | RANK_8_OCCUPANCY)))
                     & !active_occupancy;
-
-            self.generate_pawn_attacks(result, attack_occupancy, source_square_mask, source_square_shift)
+            self.generate_pawn_attacks(result, attack_occupancy, source_square_shift)
         }
     }
 
-    fn generate_pawn_attacks(&self, result: &mut Vec<Move>, mut attack_occupancy: OccupancyBits, source_square_mask: SquareMaskBits, source_square_shift: SquareShiftBits) {
+    fn generate_pawn_attacks(&self, result: &mut Vec<Move>, mut attack_occupancy: OccupancyBits, source_square_shift: SquareShiftBits) {
         while attack_occupancy != 0 {
-            let attack_square_mask: SquareMaskBits = highest_one_bit(attack_occupancy);
+            let (attack_square_mask, attack_square_shift) = mask_and_shift_from_lowest_one_bit(attack_occupancy);
             attack_occupancy &= !attack_square_mask;
-            let attack_square_shift = attack_square_mask.trailing_zeros();
 
-
-            let is_white_turn = self.is_white_turn();
-
-            if (is_white_turn && (attack_square_mask & RANK_8_OCCUPANCY) != 0) || (!is_white_turn && (attack_square_mask & RANK_1_OCCUPANCY) != 0) {
+            if (attack_square_mask & RANK_8_OCCUPANCY) != 0 || (attack_square_mask & RANK_1_OCCUPANCY) != 0 {
                 self.generate_pawn_promotions(result, source_square_shift, attack_square_shift);
             } else {
                 let is_en_passant = attack_square_shift == self.en_passant_square_shift;
 
-                let x = self.make_move(source_square_shift, attack_square_shift, PAWN, false, is_en_passant, NO_PIECE, NO_SQUARE);
-                result.push(x);
+                result.push(self.make_move(
+                    source_square_shift,
+                    attack_square_shift,
+                    PAWN,
+                    CASTLE_MOVE_FALSE_MASK,
+                    if is_en_passant { EN_PASSANT_ATTACK_TRUE_MASK } else { EN_PASSANT_ATTACK_FALSE_MASK },
+                    NO_PIECE,
+                    NO_SQUARE,
+                ));
             }
         }
     }
@@ -338,14 +339,21 @@ impl Bitboard {
     }
 
     fn generate_pawn_promotion(&self, source_square_shift: SquareShiftBits, attack_square_shift: SquareShiftBits, promote_to: PieceBits) -> Move {
-        self.make_move(source_square_shift, attack_square_shift, PAWN, false, false, promote_to, NO_SQUARE)
+        self.make_move(
+            source_square_shift,
+            attack_square_shift,
+            PAWN,
+            CASTLE_MOVE_FALSE_MASK,
+            EN_PASSANT_ATTACK_FALSE_MASK,
+            promote_to,
+            NO_SQUARE,
+        )
     }
 
     fn pawn_moves(&self, result: &mut Vec<Move>, mut pawn_occupancy: OccupancyBits, full_occupancy: OccupancyBits) {
         while pawn_occupancy != 0 {
-            let source_square_mask: SquareMaskBits = highest_one_bit(pawn_occupancy);
+            let (source_square_mask, source_square_shift) = mask_and_shift_from_lowest_one_bit(pawn_occupancy);
             pawn_occupancy &= !source_square_mask;
-            let source_square_shift: SquareShiftBits = source_square_mask.trailing_zeros();
 
             let is_white_turn = self.is_white_turn();
 
@@ -366,7 +374,15 @@ impl Bitboard {
                 if (single_move_target_mask & promote_rank) != 0 {
                     self.generate_pawn_promotions(result, source_square_shift, single_move_target_shift);
                 } else {
-                    result.push(self.make_move(source_square_shift, single_move_target_shift, PAWN, false, false, NO_PIECE, NO_SQUARE));
+                    result.push(self.make_move(
+                        source_square_shift,
+                        single_move_target_shift,
+                        PAWN,
+                        CASTLE_MOVE_FALSE_MASK,
+                        EN_PASSANT_ATTACK_FALSE_MASK,
+                        NO_PIECE,
+                        NO_SQUARE,
+                    ));
 
                     let double_move_target_mask;
                     let double_move_source_rank;
@@ -380,7 +396,15 @@ impl Bitboard {
                     }
 
                     if (source_square_mask & double_move_source_rank) != 0 && (double_move_target_mask & full_occupancy) == 0 {
-                        result.push(self.make_move(source_square_shift, double_move_target_mask.trailing_zeros(), PAWN, false, false, NO_PIECE, single_move_target_shift));
+                        result.push(self.make_move(
+                            source_square_shift,
+                            double_move_target_mask.trailing_zeros(),
+                            PAWN,
+                            CASTLE_MOVE_FALSE_MASK,
+                            EN_PASSANT_ATTACK_FALSE_MASK,
+                            NO_PIECE,
+                            single_move_target_shift,
+                        ));
                     }
                 }
             }
@@ -415,8 +439,17 @@ impl Bitboard {
         }
     }
 
+    #[inline(always)]
     fn make_castle_move(&self, king_source_square_shift: SquareShiftBits, king_target_square_shift: SquareShiftBits) -> Move {
-        self.make_move(king_source_square_shift, king_target_square_shift, KING, true, false, NO_PIECE, NO_SQUARE)
+        self.make_move(
+            king_source_square_shift,
+            king_target_square_shift,
+            KING,
+            CASTLE_MOVE_TRUE_MASK,
+            EN_PASSANT_ATTACK_FALSE_MASK,
+            NO_PIECE,
+            NO_SQUARE,
+        )
     }
 
     fn generate_attacks(
@@ -427,11 +460,18 @@ impl Bitboard {
         piece: PieceBits,
     ) {
         while attack_occupancy != 0 {
-            let target_square_mask = highest_one_bit(attack_occupancy);
+            let (target_square_mask, target_square_shift) = mask_and_shift_from_lowest_one_bit(attack_occupancy);
             attack_occupancy &= !target_square_mask;
-            let target_square_shift = target_square_mask.trailing_zeros();
 
-            result.push(self.make_move(source_square_shift, target_square_shift, piece, false, false, NO_PIECE, NO_SQUARE));
+            result.push(self.make_move(
+                source_square_shift,
+                target_square_shift,
+                piece,
+                CASTLE_MOVE_FALSE_MASK,
+                EN_PASSANT_ATTACK_FALSE_MASK,
+                NO_PIECE,
+                NO_SQUARE,
+            ));
         }
     }
 
@@ -440,77 +480,62 @@ impl Bitboard {
         source_square_shift: SquareShiftBits,
         target_square_shift: SquareShiftBits,
         piece_active: PieceBits,
-        castle_move: bool,
-        en_passant_move: bool,
+        is_castle_move_mask: u64,
+        is_en_passant_attack_mask: u64,
         promote_to: PieceBits,
         en_passant_opportunity_square_shift: SquareShiftBits,
     ) -> Move {
-        let attack_square_shift = if en_passant_move {
-            if self.is_white_turn() {
-                target_square_shift + 8
-            } else {
-                target_square_shift - 8
-            }
+        let active;
+        let passive;
+        let d_castle;
+        let attack_square_shift;
+
+        let en_passant_offset = if is_en_passant_attack_mask == 0 {
+            0
         } else {
-            target_square_shift
+            8
         };
 
-        let piece_attacked = if self.is_white_turn() { self.black } else { self.white }.get_piece_const_by_square_shift(attack_square_shift);
+        if self.is_white_turn() {
+            active = &self.white;
+            passive = &self.black;
+            d_castle = 0;
+            attack_square_shift = target_square_shift + en_passant_offset;
+        } else {
+            active = &self.black;
+            passive = &self.white;
+            d_castle = 56;
+            attack_square_shift = target_square_shift - en_passant_offset;
+        }
 
-        // if only_attack_moves {
-        //     return Move::NULL;
-        // }
+        let piece_attacked = passive.get_piece_const_by_square_shift(attack_square_shift);
 
         let mut mv = Move(0);
 
-        if en_passant_move {
-            mv.set_en_passant_attack();
-        }
+        mv.set_en_passant_attack(is_en_passant_attack_mask);
 
         mv.set_next_en_passant_square(en_passant_opportunity_square_shift);
         mv.set_piece_moved(piece_active);
         mv.set_piece_attacked(piece_attacked);
-
         mv.set_source_square(source_square_shift);
         mv.set_target_square(target_square_shift);
-
-        if castle_move {
-            mv.set_castle_move();
-        }
-
-        mv.set_previous_halfmove(self.halfmove_clock as u64);
+        mv.set_castle_move(is_castle_move_mask);
+        mv.set_previous_halfmove(self.halfmove_clock);
         mv.set_previous_en_passant_square(self.en_passant_square_shift);
-
         mv.set_promotion_piece(promote_to);
 
-        if self.is_white_turn() {
-            if self.black.queen_side_castle && target_square_shift == A8 {
-                mv.set_opponent_lost_queen_side_castle();
-            } else if self.black.king_side_castle && target_square_shift == H8 {
-                mv.set_opponent_lost_king_side_castle();
-            }
+        if passive.queen_side_castle && target_square_shift == (A8 + d_castle) {
+            mv.set_opponent_lost_queen_side_castle();
+        } else if passive.king_side_castle && target_square_shift == (H8 + d_castle) {
+            mv.set_opponent_lost_king_side_castle();
+        }
 
-            if self.white.queen_side_castle && (source_square_shift == A1 || source_square_shift == E1) {
-                mv.set_self_lost_queen_side_castle();
-            }
+        if active.queen_side_castle && (source_square_shift == (A1 - d_castle) || source_square_shift == (E1 - d_castle)) {
+            mv.set_self_lost_queen_side_castle();
+        }
 
-            if self.white.king_side_castle && (source_square_shift == H1 || source_square_shift == E1) {
-                mv.set_self_lost_king_side_castle();
-            }
-        } else {
-            if self.white.queen_side_castle && target_square_shift == A1 {
-                mv.set_opponent_lost_queen_side_castle();
-            } else if self.white.king_side_castle && target_square_shift == H1 {
-                mv.set_opponent_lost_king_side_castle();
-            }
-
-            if self.black.queen_side_castle && (source_square_shift == A8 || source_square_shift == E8) {
-                mv.set_self_lost_queen_side_castle();
-            }
-
-            if self.black.king_side_castle && (source_square_shift == H8 || source_square_shift == E8) {
-                mv.set_self_lost_king_side_castle();
-            }
+        if active.king_side_castle && (source_square_shift == (H1 - d_castle) || source_square_shift == (E1 - d_castle)) {
+            mv.set_self_lost_king_side_castle();
         }
 
         mv
@@ -534,7 +559,7 @@ impl Bitboard {
 
         self.en_passant_square_shift = mv.get_next_en_passant_square();
 
-        self.turn = if is_white_turn { BLACK } else { WHITE };
+        self.turn = self.opposite_turn();
 
         // Swap active and passive because turn has already changed
         let (passive, active) = self.get_active_and_passive_mut();
@@ -698,6 +723,7 @@ impl Bitboard {
         }
     }
 
+    #[inline(always)]
     fn make_castle(
         active: &mut PlayerState,
         rook_source_mask: SquareMaskBits,
@@ -712,6 +738,7 @@ impl Bitboard {
         active.kings |= king_target_mask;
     }
 
+    #[inline(always)]
     fn unmake_castle(
         active: &mut PlayerState,
         rook_source_mask: SquareMaskBits,
@@ -732,7 +759,7 @@ impl Bitboard {
 // Validity Checks
 impl Bitboard {
     pub fn is_valid(&self) -> bool {
-        !self._is_in_check_by_bits(if self.is_white_turn() { BLACK } else { WHITE })
+        !self._is_in_check_by_bits(self.opposite_turn())
     }
 
     pub fn is_current_in_check(&self) -> bool {
@@ -757,10 +784,10 @@ impl Bitboard {
 
     fn _is_occupancy_in_check(&self, color_bits: ColorBits, passive: &PlayerState, full_occupancy: OccupancyBits, mut king_occupancy: OccupancyBits) -> bool {
         while king_occupancy != 0 {
-            let king = highest_one_bit(king_occupancy);
-            king_occupancy &= !king;
+            let (king_square_mask, king_square_shift) = mask_and_shift_from_lowest_one_bit(king_occupancy);
+            king_occupancy &= !king_square_mask;
 
-            if self._is_square_in_check(color_bits, passive, king, full_occupancy) {
+            if self._is_square_in_check(color_bits, passive, king_square_shift, full_occupancy) {
                 return true;
             }
         }
@@ -768,9 +795,7 @@ impl Bitboard {
         false
     }
 
-    fn _is_square_in_check(&self, color_bits: ColorBits, passive: &PlayerState, king_square_mask: u64, full_occupancy: OccupancyBits) -> bool {
-        let king_square_shift = king_square_mask.trailing_zeros();
-
+    fn _is_square_in_check(&self, color_bits: ColorBits, passive: &PlayerState, king_square_shift: u32, full_occupancy: OccupancyBits) -> bool {
         let rook_attacks = ROOK_MAGICS.get_attacks(king_square_shift, full_occupancy);
 
         if (rook_attacks & (passive.rooks | passive.queens)) != 0 {
@@ -905,14 +930,20 @@ impl Bitboard {
         Fen::new(&result).unwrap()
     }
 
+
     pub fn perft(&mut self, depth: usize) -> Vec<(Move, u64)> {
         let mut result = Vec::new();
 
-        for mv in self.generate_pseudo_legal_moves() {
-            self.make(Move(mv.0));
+        let mut buffer = Vec::new();
+        self.generate_pseudo_legal_moves_with_buffer(&mut buffer);
+
+        let mut next_buffer = Vec::new();
+        for mv in buffer {
+            self.make(mv);
 
             if self.is_valid() {
-                result.push((Move(mv.0), self._perft(depth - 1)));
+                result.push((mv, self._perft(&mut next_buffer, depth - 1)));
+                next_buffer.clear();
             }
 
             self.unmake(mv);
@@ -921,21 +952,23 @@ impl Bitboard {
         result
     }
 
-    fn _perft(&mut self, depth: usize) -> u64 {
+    fn _perft(&mut self, buffer: &mut Vec<Move>, depth: usize) -> u64 {
         if depth == 0 {
             return 1;
         }
 
         let mut count = 0;
-
-        for mv in self.generate_pseudo_legal_moves() {
-            self.make(Move(mv.0));
+        let mut next_buffer = Vec::new();
+        self.generate_pseudo_legal_moves_with_buffer(buffer);
+        for mv in buffer {
+            self.make(*mv);
 
             if self.is_valid() {
-                count += self._perft(depth - 1);
+                count += self._perft(&mut next_buffer, depth - 1);
+                next_buffer.clear();
             }
 
-            self.unmake(mv);
+            self.unmake(*mv);
         }
 
         count
@@ -1016,7 +1049,7 @@ impl Display for Bitboard {
         write!(
             f,
             "╔{0}╤{0}╤{0}╤{0}╤{0}╤{0}╤{0}╤{0}╗\n{1}\n╠═A═╧═B═╧═C═╧═D═╧═E═╧═F═╧═G═╧═H═╣\n{2}╚{0}═{0}═{0}═{0}═{0}═{0}═{0}═{0}╝",
-            "═══",
+            &"═══",
             board,
             other
         )
@@ -1027,7 +1060,7 @@ impl Display for Bitboard {
 mod tests {
     use marvk_chess_core::fen::Fen;
 
-    use crate::board::{Bitboard, highest_one_bit, Move};
+    use crate::board::Bitboard;
 
     #[test]
     fn test_fen() {
@@ -1044,40 +1077,6 @@ mod tests {
             let actual = Bitboard::new(&expected).fen();
             assert_eq!(actual, expected);
         }
-    }
-
-    #[test]
-    fn test2() {
-        println!("{:b}", highest_one_bit(0b1));
-        println!("{:b}", highest_one_bit(0b11));
-        println!("{:b}", highest_one_bit(0b111));
-        println!("{:b}", highest_one_bit(0b1111));
-    }
-
-    #[test]
-    fn test() {
-        let bitboard = Bitboard::new(&Fen::new("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1").unwrap());
-        println!("{:?}", bitboard.white);
-        println!("---");
-        println!("{:?}", bitboard.black);
-        println!("---");
-        println!("{}", bitboard);
-    }
-
-    #[test]
-    fn gen_test1() {
-        let mut bitboard = Bitboard::new(&Fen::new("4k3/8/8/8/8/8/8/R3K2R w KQkq - 0 1").unwrap());
-
-        let vec = bitboard.generate_pseudo_legal_moves();
-
-        for x in vec {
-            let y = Move(x.0);
-            bitboard.make(x);
-            println!("{}", bitboard);
-            bitboard.unmake(y);
-        }
-
-        println!("{}", bitboard);
     }
 }
 

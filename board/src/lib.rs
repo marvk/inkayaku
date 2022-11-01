@@ -2,7 +2,7 @@ extern crate core;
 
 use marvk_chess_core::constants::square::Square;
 
-use crate::board::constants::{BISHOP, KING, KNIGHT, NO_PIECE, OccupancyBits, PAWN, PieceBits, QUEEN, ROOK, SquareShiftBits};
+use crate::board::constants::{BISHOP, KING, KNIGHT, NO_PIECE, OccupancyBits, PAWN, PieceBits, QUEEN, ROOK, SquareMaskBits, SquareShiftBits};
 use crate::board::Move;
 
 pub mod board;
@@ -53,6 +53,8 @@ pub fn move_to_san_reduced(mv: &Move) -> String {
     format!("{}{}{}", square_to_string(mv.get_source_square()), square_to_string(mv.get_target_square()), piece_to_string(mv.get_promotion_piece()))
 }
 
-pub fn highest_one_bit(u: u64) -> u64 {
-    u & 0x8000000000000000_u64.rotate_right(u.leading_zeros())
+#[inline(always)]
+pub fn mask_and_shift_from_lowest_one_bit(u: OccupancyBits) -> (SquareMaskBits, SquareShiftBits) {
+    let shift = u.trailing_zeros();
+    (1 << shift, shift)
 }
