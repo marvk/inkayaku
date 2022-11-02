@@ -1,14 +1,19 @@
+use std::collections::HashMap;
 use std::fmt::Display;
+use std::io::Error as IoError;
+use std::str::Split;
 
-use crate::uci::{CurrentLine, Info, ProtectionMessage, Score, UciMove, UciTx};
+use crate::uci;
+use crate::uci::{CurrentLine, Engine, Info, ProtectionMessage, Score, UciCommand, UciMove, UciTx};
 
 struct ConsoleUciTx {
     consumer: Box<dyn Fn(&str)>,
 }
 
 impl ConsoleUciTx {
-    pub fn new<F>(consumer: &'static F) -> Self
-        where F: Fn(&str)
+    pub fn new<F>(consumer: F) -> Self
+        where F: Fn(&str),
+              F: 'static
     {
         Self { consumer: Box::new(consumer) }
     }
@@ -106,17 +111,63 @@ impl UciTx for ConsoleUciTx {
     }
 }
 
+
+
+struct ConsoleUciRx<E: Engine> {
+    engine: E,
+    read: Box<dyn Fn() -> Result<String, IoError>>,
+}
+
+impl<E: Engine> ConsoleUciRx<E> {
+    pub fn new<F>(engine: E, read: F) -> Self
+        where F: Fn() -> Result<String, IoError>,
+              F: 'static,
+    {
+        Self { engine, read: Box::new(read) }
+    }
+
+
+    pub fn start(&self) {
+        loop {
+            if let Ok(raw_command) = (self.read)() {
+                todo!()
+                // if let Some(command) = CommandParser::parse(&raw_command) {
+                //     self.engine.accept(command);
+                // }
+            }
+        }
+    }
+}
+
+
 #[cfg(test)]
 mod tests {
-
+    use std::io::stdin;
     use std::sync::{Arc, Mutex};
     use std::time::Duration;
 
     use marvk_chess_core::constants::piece::Piece;
     use marvk_chess_core::constants::square::Square;
+    use marvk_chess_core::fen::Fen;
 
-    use crate::uci::{Bound, Info, ProtectionMessage, Score, UciMove, UciTx};
-    use crate::uci::console::ConsoleUciTx;
+    use crate::uci::{Bound, Engine, Go, Info, ProtectionMessage, Score, UciCommand, UciMove, UciTx};
+    use crate::uci::console::{ConsoleUciRx, ConsoleUciTx};
+
+    struct TestEngine;
+
+    impl Engine for TestEngine {
+        fn accept(&self, _: UciCommand) {}
+    }
+
+    #[test]
+    fn test() {
+        let read = || {
+            let mut result = String::new();
+            stdin().read_line(&mut result).map(|_| result)
+        };
+
+        ConsoleUciRx::new(TestEngine {}, read).start();
+    }
 
     struct MessageBuffer {
         messages: Vec<String>,
@@ -242,7 +293,7 @@ mod tests {
 
     #[test]
     fn main() {
-        let tx = ConsoleUciTx::new(&(|str| println!("{}", str)));
+        let tx = ConsoleUciTx::new(|str| println!("{}", str));
 
         tx.id_author("Marv");
     }

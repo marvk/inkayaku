@@ -2,7 +2,7 @@
 
 use marvk_chess_core::constants::to_square_index_from_indices;
 
-pub type ColorBits = u8;
+pub type ColorBits = u32;
 pub type SquareShiftBits = u32;
 pub type SquareMaskBits = u64;
 pub type PieceBits = u64;

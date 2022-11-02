@@ -1,5 +1,6 @@
 use std::char::from_digit;
 use std::fmt::{Debug, Display, Formatter};
+use std::ops::BitAnd;
 
 use marvk_chess_core::constants::color::Color;
 use marvk_chess_core::constants::colored_piece::ColoredPiece;
@@ -547,9 +548,7 @@ impl Bitboard {
     pub fn make(&mut self, mv: Move) {
         let is_white_turn = self.is_white_turn();
 
-        if !is_white_turn {
-            self.fullmove_clock += 1;
-        }
+        self.fullmove_clock += self.turn;
 
         if mv.get_halfmove_reset() != 0 {
             self.halfmove_clock = 0;
@@ -637,12 +636,10 @@ impl Bitboard {
     pub fn unmake(&mut self, mv: Move) {
         let is_white_turn = self.is_white_turn();
 
-        if is_white_turn {
-            self.fullmove_clock -= 1;
-        }
+        self.fullmove_clock -= 1 - self.turn;
         self.halfmove_clock = mv.get_previous_halfmove();
         self.en_passant_square_shift = mv.get_previous_en_passant_square();
-        self.turn = if is_white_turn { BLACK } else { WHITE };
+        self.turn = self.opposite_turn();
 
         let (active, passive) = self.get_active_and_passive_mut();
 
@@ -680,8 +677,7 @@ impl Bitboard {
                 _ => {}
             };
         } else if mv.get_en_passant_attack() != 0 {
-            active.pawns |= source_square_mask;
-            active.pawns &= !target_square_mask;
+            active.pawns = (active.pawns & !target_square_mask) | source_square_mask;
 
             let en_passant_attack_target_mask = if is_white_turn {
                 target_square_mask >> 8
@@ -779,7 +775,8 @@ impl Bitboard {
 
         let full_occupancy = active.occupancy() | passive.occupancy();
 
-        self._is_occupancy_in_check(color_bits, passive, full_occupancy, active.kings)
+        // Assume only one king
+        self._is_square_in_check(color_bits, passive, active.kings.trailing_zeros(), full_occupancy)
     }
 
     fn _is_occupancy_in_check(&self, color_bits: ColorBits, passive: &PlayerState, full_occupancy: OccupancyBits, mut king_occupancy: OccupancyBits) -> bool {
@@ -826,16 +823,18 @@ impl Bitboard {
 
         let king_attacks = KING_NONMAGICS.get_attacks(king_square_shift);
 
-        return (king_attacks & passive.kings) != 0;
+        (king_attacks & passive.kings) != 0
     }
 }
 
 // Helpers
 impl Bitboard {
+    #[inline(always)]
     fn is_white_turn(&self) -> bool {
         self.turn == WHITE
     }
 
+    #[inline(always)]
     fn get_active_and_passive(&self) -> (&PlayerState, &PlayerState) {
         if self.is_white_turn() {
             (&self.white, &self.black)
@@ -844,6 +843,7 @@ impl Bitboard {
         }
     }
 
+    #[inline(always)]
     fn get_active_and_passive_mut(&mut self) -> (&mut PlayerState, &mut PlayerState) {
         if self.is_white_turn() {
             (&mut self.white, &mut self.black)
@@ -864,6 +864,7 @@ impl Bitboard {
         }
     }
 
+    #[inline(always)]
     fn opposite_turn(&self) -> ColorBits {
         1 - self.turn
     }

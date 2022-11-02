@@ -15,6 +15,7 @@ lazy_static! {
 }
 
 impl Nonmagics {
+    #[inline(always)]
     pub fn get_attacks(&self, square: SquareShiftBits) -> u64 {
         self.0[square as usize]
     }

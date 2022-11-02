@@ -44,6 +44,7 @@ impl Magics {
         Square::SQUARES.iter().enumerate().map(|(index, &square)| { ConfigurationGenerator::new(piece, square).generate_all_attacks_with_magic(magics[index]) }).collect::<Vec<_>>().try_into().map(Self).unwrap()
     }
 
+    #[inline(always)]
     pub fn get_attacks(&self, square: SquareShiftBits, occupancy: u64) -> u64 {
         self.0[square as usize].get_attacks(occupancy)
     }

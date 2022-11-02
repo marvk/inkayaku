@@ -2,7 +2,7 @@
 #[derive(Eq, PartialEq, Debug)]
 pub struct Color {
     pub name: &'static str,
-    pub index: u8,
+    pub index: u32,
 }
 
 impl Color {

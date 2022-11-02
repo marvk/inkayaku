@@ -9,7 +9,7 @@ use marvk_chess_core::constants::direction::Direction;
 use marvk_chess_core::constants::piece::Piece;
 use marvk_chess_core::constants::square::Square;
 
-#[derive(Debug)]
+#[derive(Debug, Eq, PartialEq)]
 pub struct Configuration {
     pub mask: u64,
     pub magic: u64,
@@ -19,12 +19,12 @@ pub struct Configuration {
 }
 
 impl Configuration {
-    // #[inline(always)]
+    #[inline(always)]
     pub fn get_attacks(&self, occupancy: u64) -> u64 {
         self.attacks[self.hash(occupancy)]
     }
 
-    // #[inline(always)]
+    #[inline(always)]
     fn hash(&self, occupancy: u64) -> usize {
         hash(self.mask, self.hash_shift, self.hash_mask, self.magic, occupancy)
     }
@@ -203,7 +203,7 @@ impl<T: Rng> MagicGenerator<T> {
     }
 }
 
-// #[inline(always)]
+#[inline(always)]
 fn hash(mask: u64, hash_shift: u32, hash_mask: u64, magic: u64, occupancy: u64) -> usize {
     let i1 = occupancy & mask;
     let i2 = i1.overflowing_mul(magic).0;

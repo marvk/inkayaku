@@ -6,7 +6,9 @@ use marvk_chess_core::constants::square::*;
 use marvk_chess_core::fen::Fen;
 
 pub mod console;
+pub mod parser;
 
+#[derive(Debug, Eq, PartialEq)]
 pub struct UciMove {
     pub source: Square,
     pub target: Square,
@@ -35,8 +37,9 @@ impl Display for UciMove {
     }
 }
 
-pub struct Go<'a> {
-    search_moves: Option<&'a [UciMove]>,
+#[derive(Debug, Eq, PartialEq)]
+pub struct Go {
+    search_moves: Option<Vec<UciMove>>,
     ponder: bool,
     white_time: Option<Duration>,
     black_time: Option<Duration>,
@@ -171,20 +174,46 @@ impl Display for ProtectionMessage {
     }
 }
 
-pub trait UciRx {
-    fn uci(&self);
-    fn set_debug(&self, debug: bool);
-    fn is_ready(&self);
-    fn set_option(&self, name: &str, value: &str);
-    fn register_later(&self);
-    fn register(&self, name: &str, code: &str);
-    fn uci_new_game(&self);
-    fn position_from_default(&self, uci_moves: &[UciMove]);
-    fn position_from(&self, fen: Fen, uci_moves: &[UciMove]);
-    fn go(&self, go: &Go);
-    fn stop(&self);
-    fn ponder_hit(&self);
-    fn quit(&self);
+// pub trait UciRx {
+//     fn uci(&self);
+//     fn set_debug(&self, debug: bool);
+//     fn is_ready(&self);
+//     fn set_option(&self, name: &str, value: &str);
+//     fn register_later(&self);
+//     fn register(&self, name: &str, code: &str);
+//     fn uci_new_game(&self);
+//     fn position_from_default(&self, uci_moves: &[UciMove]);
+//     fn position_from(&self, fen: Fen, uci_moves: &[UciMove]);
+//     fn go(&self, go: &Go);
+//     fn stop(&self);
+//     fn ponder_hit(&self);
+//     fn quit(&self);
+// }
+
+#[derive(Debug, Eq, PartialEq)]
+pub enum UciCommand {
+    Uci,
+    SetDebug { debug: bool },
+    IsReady,
+    SetOption { name: String },
+    SetOptionValue { name: String, value: String },
+    RegisterLater,
+    Register { name: String, code: String },
+    UciNewGame,
+    PositionFromDefault { moves: Vec<UciMove> },
+    PositionFrom { fen: Fen, moves: Vec<UciMove> },
+    Go { go: Go },
+    Stop,
+    PonderHit,
+    Quit,
+}
+
+impl UciCommand {
+
+}
+
+pub trait Engine {
+    fn accept(&self, command: UciCommand);
 }
 
 pub trait UciTx {
@@ -198,3 +227,5 @@ pub trait UciTx {
     fn registration(&self, registration: ProtectionMessage);
     fn info(&self, info: &Info);
 }
+
+
