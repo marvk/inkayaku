@@ -25,25 +25,25 @@ impl Piece {
     }
 
     pub fn as_black(&self) -> ColoredPiece {
-        match self {
-            &Self::PAWN => ColoredPiece::BLACK_PAWN,
-            &Self::KNIGHT => ColoredPiece::BLACK_KNIGHT,
-            &Self::BISHOP => ColoredPiece::BLACK_BISHOP,
-            &Self::ROOK => ColoredPiece::BLACK_ROOK,
-            &Self::QUEEN => ColoredPiece::BLACK_QUEEN,
-            &Self::KING => ColoredPiece::BLACK_KING,
+        match *self {
+            Self::PAWN => ColoredPiece::BLACK_PAWN,
+            Self::KNIGHT => ColoredPiece::BLACK_KNIGHT,
+            Self::BISHOP => ColoredPiece::BLACK_BISHOP,
+            Self::ROOK => ColoredPiece::BLACK_ROOK,
+            Self::QUEEN => ColoredPiece::BLACK_QUEEN,
+            Self::KING => ColoredPiece::BLACK_KING,
             _ => panic!(),
         }
     }
 
     pub fn as_white(&self) -> ColoredPiece {
-        match self {
-            &Self::PAWN => ColoredPiece::WHITE_PAWN,
-            &Self::KNIGHT => ColoredPiece::WHITE_KNIGHT,
-            &Self::BISHOP => ColoredPiece::WHITE_BISHOP,
-            &Self::ROOK => ColoredPiece::WHITE_ROOK,
-            &Self::QUEEN => ColoredPiece::WHITE_QUEEN,
-            &Self::KING => ColoredPiece::WHITE_KING,
+        match *self {
+            Self::PAWN => ColoredPiece::WHITE_PAWN,
+            Self::KNIGHT => ColoredPiece::WHITE_KNIGHT,
+            Self::BISHOP => ColoredPiece::WHITE_BISHOP,
+            Self::ROOK => ColoredPiece::WHITE_ROOK,
+            Self::QUEEN => ColoredPiece::WHITE_QUEEN,
+            Self::KING => ColoredPiece::WHITE_KING,
             _ => panic!(),
         }
     }
@@ -53,6 +53,18 @@ impl Piece {
     }
 
     pub const PIECES: [Self; 6] = [Self::PAWN, Self::KNIGHT, Self::BISHOP, Self::ROOK, Self::QUEEN, Self::KING];
+
+    pub fn by_char(c: char) -> Option<Piece> {
+        match c {
+            'K' | 'k' => Some(Self::KING),
+            'Q' | 'q' => Some(Self::QUEEN),
+            'R' | 'r' => Some(Self::ROOK),
+            'B' | 'b' => Some(Self::BISHOP),
+            'N' | 'n' => Some(Self::KNIGHT),
+            'P' | 'p' => Some(Self::PAWN),
+            _ => None,
+        }
+    }
 
     pub fn by_index<'a>(index: usize) -> &'a Piece {
         &Self::PIECES[index]

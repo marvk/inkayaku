@@ -1,13 +1,17 @@
-use std::cell::{RefCell, RefMut};
-use std::collections::VecDeque;
+use std::cell::RefCell;
+use std::collections::{HashSet, VecDeque};
+use std::num::ParseIntError;
+use std::time::Duration;
 
-use crate::uci::{Go, UciCommand};
+use marvk_chess_core::fen::{Fen, FEN_STARTPOS, ParseFenError};
+
+use crate::uci::{Go, ParseUciMoveError, UciMove};
 use crate::uci::parser::ParserError::*;
-use crate::uci::UciCommand::{IsReady, PonderHit, Quit, Stop, Uci, UciNewGame};
+use crate::uci::UciCommand;
+use crate::uci::UciCommand::{Go as GoCommand, IsReady, PonderHit, PositionFrom, Quit, Register, RegisterLater, Stop, Uci, UciNewGame};
 
 pub struct CommandParser<'a> {
     queue: RefCell<VecDeque<&'a str>>,
-    current_token: RefCell<Option<&'a str>>,
 }
 
 #[derive(Debug, Eq, PartialEq)]
@@ -43,31 +47,24 @@ pub enum NodeValue {
 
 #[derive(Debug, Eq, PartialEq)]
 pub enum ParserError {
-    EmptyCommand,
-    InvalidToken(String),
-    AlreadyConsumed,
-    EmptyToken,
-    EmptyRemaining,
-    UnexpectedEndOfCommand,
     UnknownCommand(String),
+    UnexpectedEndOfCommand,
+    UnexpectedToken { actual: String, expected: String },
+    InvalidFen(ParseFenError),
+    InvalidInt(ParseIntError),
+    DuplicatedToken(String),
+    InvalidUciMove(ParseUciMoveError),
 }
 
 impl<'a> CommandParser<'a> {
     pub fn new(command: &'a str) -> Self {
-        let mut queue: VecDeque<&str> = command.trim().split(' ').filter(|&s| !s.is_empty()).collect();
-        let next = queue.pop_front();
+        let queue = command.trim().split(' ').filter(|&s| !s.is_empty()).collect();
 
-        Self { queue: RefCell::new(queue), current_token: RefCell::new(next) }
+        Self { queue: RefCell::new(queue) }
     }
 
     pub fn parse(self) -> Result<UciCommand, ParserError> {
-        let option = *self.current_token.borrow();
-
-        if let Some(command) = option {
-            self.parse_root(command)
-        } else {
-            Err(EmptyCommand)
-        }
+        self.parse_root(self.next()?)
     }
 
     fn parse_root(&self, root: &str) -> Result<UciCommand, ParserError> {
@@ -88,105 +85,191 @@ impl<'a> CommandParser<'a> {
     }
 
     fn consume(&self, token: &str) -> Result<(), ParserError> {
-
-    }
-
-    fn next(&self) -> Result<&str, ParserError> {
-        let current = self.queue.borrow_mut().pop_front();
-        self.current_token.replace(current);
-        match current {
-            Some(token) => Ok(token),
-            None => Err(EmptyToken),
+        match self.next()? {
+            actual if token == actual => Ok(()),
+            actual => Err(UnexpectedToken { actual: actual.to_string(), expected: token.to_string() }),
         }
     }
 
-    fn peek(&self) -> Option<&str> {
-        self.queue.borrow().front().map(|&s| s)
+    fn next(&self) -> Result<&str, ParserError> {
+        match self.queue.borrow_mut().pop_front() {
+            Some(result) => Ok(result),
+            None => Err(UnexpectedEndOfCommand),
+        }
+    }
+
+    fn peek(&self) -> Result<&str, ParserError> {
+        match self.queue.borrow().front().map(|&s| s) {
+            Some(result) => Ok(result),
+            None => Err(UnexpectedEndOfCommand),
+        }
     }
 
     fn remaining(&self) -> Result<String, ParserError> {
         match self.queue.borrow().iter().cloned().collect::<Vec<&str>>().join(" ") {
             result if !result.is_empty() => Ok(result),
-            _ => Err(EmptyRemaining)
+            _ => Err(UnexpectedEndOfCommand),
         }
     }
 
-    fn single(&self, key: &str) -> Result<&str, ParserError> {
-        match self.next()? {
-            token if token == key => Ok(self.next()?),
-            token => Err(InvalidToken(token.to_string())),
-        }
+    fn until_token_or_end(&self, token: &str) -> Result<String, ParserError> {
+        self.until_one_of_or_end(&[token])
     }
 
-    fn single_with_remaining(&self, key: &str) -> Result<String, ParserError> {
-        match self.next()? {
-            token if token == key => Ok(self.remaining()?),
-            token => Err(InvalidToken(token.to_string())),
-        }
+    fn until_end(&self) -> Result<String, ParserError> {
+        self.until_one_of_or_end(&[])
     }
+
+    fn until_one_of_or_end(&self, stop_tokens: &[&str]) -> Result<String, ParserError> {
+        let mut result = self.next()?.to_string();
+
+        while self.peek().map(|s| !stop_tokens.contains(&s)).unwrap_or(false) {
+            result.push(' ');
+            result.push_str(self.next().unwrap())
+        }
+
+        Ok(result)
+    }
+
+    const GO_TOKENS: [&'static str; 12] = ["searchmoves", "ponder", "wtime", "btime", "winc", "binc", "movestogo", "depth", "nodes", "mate", "movetime", "infinite"];
 
     fn parse_go(&self) -> Result<UciCommand, ParserError> {
-        todo!()
+        let mut go = Go { ..Go::EMPTY };
+
+        let mut visited_tokens = HashSet::new();
+
+        println!("{:?}", go);
+
+        loop {
+            match self.next() {
+                Ok(token) if visited_tokens.contains(token) => return Err(DuplicatedToken(token.to_string())),
+                Ok(token) => {
+                    println!("{}", token);
+                    match token {
+                        "searchmoves" => go.search_moves = self.parse_moves_until_one_of_or_end(&Self::GO_TOKENS)?,
+                        "ponder" => go.ponder = true,
+                        "wtime" => go.white_time = self.parse_duration().map(Some)?,
+                        "btime" => go.black_time = self.parse_duration().map(Some)?,
+                        "winc" => go.white_increment = self.parse_duration().map(Some)?,
+                        "binc" => go.black_increment = self.parse_duration().map(Some)?,
+                        "movestogo" => go.moves_to_go = self.parse_u64().map(Some)?,
+                        "depth" => go.depth = self.parse_u64().map(Some)?,
+                        "nodes" => go.nodes = self.parse_u64().map(Some)?,
+                        "mate" => go.mate = self.parse_u64().map(Some)?,
+                        "movetime" => go.move_time = self.parse_duration().map(Some)?,
+                        "infinite" => go.infinite = true,
+                        _ => return Err(UnexpectedToken { actual: token.to_string(), expected: format!("one of {:?}", Self::GO_TOKENS) }),
+                    }
+                    visited_tokens.insert(token);
+                }
+                Err(UnexpectedEndOfCommand) => break,
+                Err(error) => return Err(error),
+            }
+        }
+        println!("{:?}", go);
+
+        Ok(GoCommand { go })
     }
 
+    fn parse_duration(&self) -> Result<Duration, ParserError> { self.next()?.parse().map_err(InvalidInt).map(Duration::from_millis) }
+    fn parse_u64(&self) -> Result<u64, ParserError> { self.next()?.parse().map_err(InvalidInt) }
+
     fn parse_position(&self) -> Result<UciCommand, ParserError> {
-        todo!()
+        let fen = match self.next()? {
+            "fen" => Fen::new(&self.until_token_or_end("moves")?).map_err(InvalidFen),
+            "startpos" => Ok(FEN_STARTPOS.clone()),
+            token => Err(UnexpectedToken { actual: token.to_string(), expected: format!("one of {:?}", &["fen", "startpos"]) })
+        }?;
+
+        let moves = match self.consume("moves") {
+            Ok(_) => self.parse_moves(),
+            Err(UnexpectedEndOfCommand) => Ok(Vec::new()),
+            Err(error) => Err(error),
+        }?;
+
+        Ok(PositionFrom { fen, moves })
+    }
+
+    fn parse_moves(&self) -> Result<Vec<UciMove>, ParserError> {
+        self.parse_moves_until_one_of_or_end(&[])
+    }
+
+    fn parse_moves_until_one_of_or_end(&self, stop_tokens: &[&str]) -> Result<Vec<UciMove>, ParserError> {
+        let mut result = Vec::new();
+
+        loop {
+            match self.peek() {
+                Ok(token) if stop_tokens.contains(&token) => break,
+                Ok(_) => result.push(UciMove::parse(self.next()?).map_err(InvalidUciMove)?),
+                Err(UnexpectedEndOfCommand) => break,
+                Err(error) => return Err(error),
+            }
+        }
+
+        Ok(result)
     }
 
     fn parse_register(&self) -> Result<UciCommand, ParserError> {
-        todo!()
+        match self.peek()? {
+            "later" => Ok(RegisterLater),
+            _ => {
+                self.consume("name")?;
+                let name = self.until_token_or_end("code")?;
+                self.consume("code")?;
+                let code = self.until_end()?;
+
+                Ok(Register { name, code })
+            }
+        }
     }
 
     fn parse_setoption(&self) -> Result<UciCommand, ParserError> {
-        let name = self.single("name")?.to_string();
+        self.consume("name")?;
+        let name = self.until_token_or_end("value")?;
+        let value_exists = self.consume("value");
+        let value = self.until_end();
 
-        match self.soft_optional(self.single_with_remaining("value"))? {
-            Some(value) => Ok(UciCommand::SetOptionValue { name, value }),
-            None => Ok(UciCommand::SetOption { name }),
+        match (value_exists, value) {
+            (Ok(()), Ok(value)) => Ok(UciCommand::SetOptionValue { name, value }),
+            (Err(UnexpectedEndOfCommand), _) => Ok(UciCommand::SetOption { name }),
+            (Ok(()), Err(error)) | (Err(error), _) => Err(error),
         }
-    }
-
-    fn soft_optional<T>(&self, result: Result<T, ParserError>) -> Result<Option<T>, ParserError> {
-        match result {
-            Ok(node) => Ok(Some(node)),
-            Err(UnexpectedEndOfCommand) | Err(EmptyToken) => Ok(None),
-            Err(error) => Err(error),
-        }
-    }
-
-    fn soft_push(&self, vec: &mut Vec<Node>, result: Result<Node, ParserError>) -> Result<(), ParserError> {
-        match result {
-            Ok(node) => vec.push(node),
-            Err(UnexpectedEndOfCommand) => {}
-            Err(error) => return Err(error),
-        }
-
-        Ok(())
     }
 
     fn parse_debug(&self) -> Result<UciCommand, ParserError> {
         match self.next()? {
             "on" => Ok(true),
             "off" => Ok(false),
-            token => Err(InvalidToken(token.to_string())),
+            token => Err(UnexpectedToken { actual: token.to_string(), expected: format!("one of {:?}", &["on", "off"]) }),
         }.map(|value| UciCommand::SetDebug { debug: value })
     }
 }
 
 #[cfg(test)]
 mod tests {
+    use std::num::IntErrorKind::NegOverflow;
+    use std::num::ParseIntError;
+    use std::time::Duration;
+
+    use marvk_chess_core::constants::piece::Piece;
+    use marvk_chess_core::constants::square::Square;
+    use marvk_chess_core::fen::{Fen, FEN_STARTPOS};
+    use marvk_chess_core::fen::ParseFenError::ConcurrentNumbers;
+
+    use crate::uci::{ParseUciMoveError, UciCommand, UciMove};
+    use crate::uci::Go;
     use crate::uci::parser::CommandParser;
-    use crate::uci::parser::ParserError::{EmptyCommand, EmptyRemaining, EmptyToken, InvalidToken, UnexpectedEndOfCommand, UnknownCommand};
-    use crate::uci::UciCommand;
-    use crate::uci::UciCommand::{IsReady, PonderHit, Quit, SetDebug, SetOption, SetOptionValue, Stop, Uci, UciNewGame};
+    use crate::uci::parser::ParserError::{InvalidFen, InvalidInt, InvalidUciMove, UnexpectedEndOfCommand, UnexpectedToken, UnknownCommand};
+    use crate::uci::ParseUciMoveError::InvalidFormat;
+    use crate::uci::UciCommand::{Go as GoCommand, IsReady, PonderHit, PositionFrom, Quit, Register, RegisterLater, SetDebug, SetOption, SetOptionValue, Stop, Uci, UciNewGame};
 
     #[test]
     fn general() {
-        assert_eq!(CommandParser::new("").parse(), Err(EmptyCommand));
-        assert_eq!(CommandParser::new("   ").parse(), Err(EmptyCommand));
+        assert_eq!(CommandParser::new("").parse(), Err(UnexpectedEndOfCommand));
+        assert_eq!(CommandParser::new("   ").parse(), Err(UnexpectedEndOfCommand));
         assert_eq!(CommandParser::new("something").parse(), Err(UnknownCommand("something".to_string())));
         assert_eq!(CommandParser::new("something   ").parse(), Err(UnknownCommand("something".to_string())));
-        assert_eq!(CommandParser::new("").parse(), Err(EmptyCommand));
+        assert_eq!(CommandParser::new("").parse(), Err(UnexpectedEndOfCommand));
     }
 
     #[test]
@@ -196,7 +279,7 @@ mod tests {
         assert_eq!(CommandParser::new("debug off something").parse(), Ok(SetDebug { debug: false }));
         assert_eq!(CommandParser::new("debug off ").parse(), Ok(SetDebug { debug: false }));
         assert_eq!(CommandParser::new(" debug off ").parse(), Ok(SetDebug { debug: false }));
-        assert_eq!(CommandParser::new("debug something").parse(), Err(InvalidToken("something".to_string())));
+        assert_eq!(CommandParser::new("debug something").parse(), Err(UnexpectedToken { actual: "something".to_string(), expected: r#"one of ["on", "off"]"#.to_string() }));
         assert_eq!(CommandParser::new("debug ").parse(), Err(UnexpectedEndOfCommand));
         assert_eq!(CommandParser::new("debug").parse(), Err(UnexpectedEndOfCommand));
     }
@@ -206,11 +289,97 @@ mod tests {
         assert_eq!(CommandParser::new("setoption name foo").parse(), Ok(SetOption { name: "foo".to_string() }));
         assert_eq!(CommandParser::new("setoption name foo ").parse(), Ok(SetOption { name: "foo".to_string() }));
         assert_eq!(CommandParser::new(" setoption name foo").parse(), Ok(SetOption { name: "foo".to_string() }));
-        assert_eq!(CommandParser::new("setoption name foo something").parse(), Err(InvalidToken("something".to_string())));
-        assert_eq!(CommandParser::new("setoption something foo").parse(), Err(InvalidToken("something".to_string())));
+        assert_eq!(CommandParser::new("setoption something foo").parse(), Err(UnexpectedToken { actual: "something".to_string(), expected: "name".to_string() }));
+        assert_eq!(CommandParser::new("setoption name foo something").parse(), Ok(SetOption { name: "foo something".to_string() }));
         assert_eq!(CommandParser::new("setoption name foo value 1 2 3 ").parse(), Ok(SetOptionValue { name: "foo".to_string(), value: "1 2 3".to_string() }));
-        assert_eq!(CommandParser::new("setoption name foo value  ").parse(), Err(EmptyRemaining));
-        assert_eq!(CommandParser::new("setoption   ").parse(), Err(EmptyToken));
+        assert_eq!(CommandParser::new("setoption name foo value  ").parse(), Err(UnexpectedEndOfCommand));
+        assert_eq!(CommandParser::new("setoption   ").parse(), Err(UnexpectedEndOfCommand));
+    }
+
+    #[test]
+    fn register() {
+        assert_eq!(CommandParser::new("register").parse(), Err(UnexpectedEndOfCommand));
+        assert_eq!(CommandParser::new("register later").parse(), Ok(RegisterLater));
+        assert_eq!(CommandParser::new("   register later   something").parse(), Ok(RegisterLater));
+        assert_eq!(CommandParser::new("register name Stefan MK code 4359874324").parse(), Ok(Register { name: "Stefan MK".to_string(), code: "4359874324".to_string() }));
+        assert_eq!(CommandParser::new("  register name Stefan MK code 43598 74324 something  ").parse(), Ok(Register { name: "Stefan MK".to_string(), code: "43598 74324 something".to_string() }));
+    }
+
+    #[test]
+    fn position() {
+        assert_eq!(CommandParser::new("position fen").parse(), Err(UnexpectedEndOfCommand));
+        assert_eq!(CommandParser::new("position fen rnbqkbnr/pp1ppppp/8/2p5/4P3/5N2/PPPP1PPP/RNBQKB1R b - - 1 2").parse(), Ok(PositionFrom { fen: Fen::new("rnbqkbnr/pp1ppppp/8/2p5/4P3/5N2/PPPP1PPP/RNBQKB1R b - - 1 2").unwrap(), moves: Vec::new() }));
+        assert_eq!(CommandParser::new("position fen rnbqkbnr/pp1ppppp/8/2p5/4P3/5N2/PPPP1PPP/RNBQKB1R b - - 1 2 moves").parse(), Ok(PositionFrom { fen: Fen::new("rnbqkbnr/pp1ppppp/8/2p5/4P3/5N2/PPPP1PPP/RNBQKB1R b - - 1 2").unwrap(), moves: Vec::new() }));
+        assert_eq!(CommandParser::new("position fen rnbqkbnr/pp1ppppp/8/2p5/4P3/5N2/PPPP1PPP/RNBQKB1R b - - 1 2 moves h4h6q a1a2").parse(), Ok(PositionFrom { fen: Fen::new("rnbqkbnr/pp1ppppp/8/2p5/4P3/5N2/PPPP1PPP/RNBQKB1R b - - 1 2").unwrap(), moves: vec![UciMove::new_with_promotion(Square::H4, Square::H6, Piece::QUEEN), UciMove::new(Square::A1, Square::A2)] }));
+        assert_eq!(CommandParser::new("position fen rnbqkbnr/pp1ppppp/8/2p5/4P3/5N2/PPPP1PPP/RNBQKB1R b - - 1 2 moves h4h6q a1a9").parse(), Err(InvalidUciMove(InvalidFormat("a1a9".to_string()))));
+        assert_eq!(CommandParser::new("position fen rnbqkbnr/pp1ppppp/8/44/4P3/5N2/PPPP1PPP/RNBQKB1R b - - 1 2 moves h4h6q a1a9").parse(), Err(InvalidFen(ConcurrentNumbers { rank: "44".to_string() })));
+        assert_eq!(CommandParser::new("position startpos").parse(), Ok(PositionFrom { fen: FEN_STARTPOS.clone(), moves: Vec::new() }));
+        assert_eq!(CommandParser::new("position startpos moves").parse(), Ok(PositionFrom { fen: FEN_STARTPOS.clone(), moves: Vec::new() }));
+        assert_eq!(CommandParser::new("position startpos moves h4h6q a1a2").parse(), Ok(PositionFrom { fen: FEN_STARTPOS.clone(), moves: vec![UciMove::new_with_promotion(Square::H4, Square::H6, Piece::QUEEN), UciMove::new(Square::A1, Square::A2)] }));
+        assert_eq!(CommandParser::new("position startpos something").parse(), Err(UnexpectedToken { expected: "moves".to_string(), actual: "something".to_string() }));
+    }
+
+    #[test]
+    fn go() {
+        assert_eq!(CommandParser::new("go").parse(), Ok(GoCommand { go: Go::EMPTY }));
+        assert_eq!(CommandParser::new("go searchmoves h4h6q a1a2 ponder wtime 60001 btime 60000 winc 1001 binc 1000 movestogo 10 depth 11 nodes 20000 mate 10 movetime 999 infinite").parse(),
+                   Ok(GoCommand {
+                       go: Go::new(
+                           vec![UciMove::new_with_promotion(Square::H4, Square::H6, Piece::QUEEN), UciMove::new(Square::A1, Square::A2)],
+                           true,
+                           Some(Duration::from_millis(60001)),
+                           Some(Duration::from_millis(60000)),
+                           Some(Duration::from_millis(1001)),
+                           Some(Duration::from_millis(1000)),
+                           Some(10),
+                           Some(11),
+                           Some(20000),
+                           Some(10),
+                           Some(Duration::from_millis(999)),
+                           true,
+                       )
+                   })
+        );
+        assert_eq!(CommandParser::new("go searchmoves h4h6q a1a2 wtime 60001 btime 60000 winc 1001 binc 1000 movestogo 10 depth 11 nodes 20000 mate 10 movetime 999").parse(),
+                   Ok(GoCommand {
+                       go: Go::new(
+                           vec![UciMove::new_with_promotion(Square::H4, Square::H6, Piece::QUEEN), UciMove::new(Square::A1, Square::A2)],
+                           false,
+                           Some(Duration::from_millis(60001)),
+                           Some(Duration::from_millis(60000)),
+                           Some(Duration::from_millis(1001)),
+                           Some(Duration::from_millis(1000)),
+                           Some(10),
+                           Some(11),
+                           Some(20000),
+                           Some(10),
+                           Some(Duration::from_millis(999)),
+                           false,
+                       )
+                   })
+        );
+        assert_eq!(CommandParser::new(" go    searchmoves h4h6q a1a2 wtime 60001 winc 1001  btime 60000 binc 1000 movestogo 10 depth 11 nodes 20000 mate 10 movetime 999").parse(),
+                   Ok(GoCommand {
+                       go: Go::new(
+                           vec![UciMove::new_with_promotion(Square::H4, Square::H6, Piece::QUEEN), UciMove::new(Square::A1, Square::A2)],
+                           false,
+                           Some(Duration::from_millis(60001)),
+                           Some(Duration::from_millis(60000)),
+                           Some(Duration::from_millis(1001)),
+                           Some(Duration::from_millis(1000)),
+                           Some(10),
+                           Some(11),
+                           Some(20000),
+                           Some(10),
+                           Some(Duration::from_millis(999)),
+                           false,
+                       )
+                   })
+        );
+        assert_eq!(CommandParser::new(" go    searchmoves h4h6q a1a2 wtime 60001 winc 1001  btime 60000 binc 1000 movestogo 10 depth 11 nodes 20000 mate 10 movetime 999  something").parse(), Err(UnexpectedToken { actual: "something".to_string(), expected: format!("one of {:?}", CommandParser::GO_TOKENS) }));
+        assert_eq!(CommandParser::new("go searchmoves h4h6x").parse(), Err(InvalidUciMove(ParseUciMoveError::InvalidFormat("h4h6x".to_string()))));
+        // Can't construct ParseIntError?
+        assert!(CommandParser::new("go btime -60000").parse().is_err());
     }
 
     #[test]

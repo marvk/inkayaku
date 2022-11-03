@@ -117,12 +117,18 @@ impl Square {
         Self::A2, Self::B2, Self::C2, Self::D2, Self::E2, Self::F2, Self::G2, Self::H2,
         Self::A1, Self::B1, Self::C1, Self::D1, Self::E1, Self::F1, Self::G1, Self::H1,
     ];
-    
+
+    pub fn by_chars(file: char, rank: char) -> Option<Self> {
+        let file = (file as usize) - ('a' as usize);
+        let i = rank.to_digit(10)?;
+        let rank = 8_u32.wrapping_sub(i) as usize;
+        Self::by_indices(file, rank)
+    }
+
     pub fn by_indices(file_index: usize, rank_index: usize) -> Option<Self> {
         if file_index > 7 || rank_index > 7 {
             return None;
         }
-
 
         match to_square_index_from_indices(file_index, rank_index) {
             0 => Some(Self::A8),

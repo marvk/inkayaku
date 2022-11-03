@@ -5,8 +5,15 @@ use marvk_chess_core::constants::piece::Piece;
 use marvk_chess_core::constants::square::*;
 use marvk_chess_core::fen::Fen;
 
+use crate::uci::ParseUciMoveError::InvalidFormat;
+
 pub mod console;
 pub mod parser;
+
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub enum ParseUciMoveError {
+    InvalidFormat(String)
+}
 
 #[derive(Debug, Eq, PartialEq)]
 pub struct UciMove {
@@ -22,6 +29,30 @@ impl UciMove {
 
     pub fn new_with_promotion(source: Square, target: Square, promote_to: Piece) -> Self {
         Self { source, target, promote_to: Some(promote_to) }
+    }
+
+    pub fn parse(raw: &str) -> Result<UciMove, ParseUciMoveError> {
+        let mut chars = raw.chars();
+
+        let produce_error = || InvalidFormat(raw.to_string());
+
+        let mut next_char = || {
+            chars.next().ok_or_else(produce_error)
+        };
+
+        let source = Square::by_chars(next_char()?, next_char()?).ok_or_else(produce_error)?;
+        let target = Square::by_chars(next_char()?, next_char()?).ok_or_else(produce_error)?;
+
+        let promote_to= match next_char() {
+            Ok(c) => Some(Piece::by_char(c).ok_or_else(produce_error)?),
+            Err(_) => None,
+        };
+
+        Ok(UciMove {
+            source,
+            target,
+            promote_to,
+        })
     }
 }
 
@@ -39,18 +70,26 @@ impl Display for UciMove {
 
 #[derive(Debug, Eq, PartialEq)]
 pub struct Go {
-    search_moves: Option<Vec<UciMove>>,
+    search_moves: Vec<UciMove>,
     ponder: bool,
     white_time: Option<Duration>,
     black_time: Option<Duration>,
     white_increment: Option<Duration>,
     black_increment: Option<Duration>,
-    moves_to_go: Option<u32>,
-    depth: Option<u32>,
+    moves_to_go: Option<u64>,
+    depth: Option<u64>,
     nodes: Option<u64>,
-    mate: Option<u32>,
+    mate: Option<u64>,
     move_time: Option<Duration>,
     infinite: bool,
+}
+
+impl Go {
+    pub const EMPTY:Go = Go::new(Vec::new(), false, None, None, None, None, None, None, None, None, None, false);
+
+    pub const  fn new(search_moves: Vec<UciMove>, ponder: bool, white_time: Option<Duration>, black_time: Option<Duration>, white_increment: Option<Duration>, black_increment: Option<Duration>, moves_to_go: Option<u64>, depth: Option<u64>, nodes: Option<u64>, mate: Option<u64>, move_time: Option<Duration>, infinite: bool) -> Self {
+        Self { search_moves, ponder, white_time, black_time, white_increment, black_increment, moves_to_go, depth, nodes, mate, move_time, infinite }
+    }
 }
 
 #[derive(Eq, PartialEq, Debug, Clone, Copy)]
@@ -200,7 +239,6 @@ pub enum UciCommand {
     RegisterLater,
     Register { name: String, code: String },
     UciNewGame,
-    PositionFromDefault { moves: Vec<UciMove> },
     PositionFrom { fen: Fen, moves: Vec<UciMove> },
     Go { go: Go },
     Stop,
@@ -208,9 +246,7 @@ pub enum UciCommand {
     Quit,
 }
 
-impl UciCommand {
-
-}
+impl UciCommand {}
 
 pub trait Engine {
     fn accept(&self, command: UciCommand);
@@ -228,4 +264,21 @@ pub trait UciTx {
     fn info(&self, info: &Info);
 }
 
+#[cfg(test)]
+mod tests {
+    use marvk_chess_core::constants::piece::Piece;
+    use marvk_chess_core::constants::square::Square;
+    use crate::uci::{ParseUciMoveError, UciMove};
 
+    #[test]
+    fn test_parse_uci_move() {
+        assert_eq!(UciMove::parse("a1a2"), Ok(UciMove::new(Square::A1, Square::A2)));
+        assert_eq!(UciMove::parse("a8h8"), Ok(UciMove::new(Square::A8, Square::H8)));
+        assert_eq!(UciMove::parse("h1a1"), Ok(UciMove::new(Square::H1, Square::A1)));
+        assert_eq!(UciMove::parse("h1a1q"), Ok(UciMove::new_with_promotion(Square::H1, Square::A1, Piece::QUEEN)));
+        assert_eq!(UciMove::parse("h1a1k"), Ok(UciMove::new_with_promotion(Square::H1, Square::A1, Piece::KING)));
+        assert_eq!(UciMove::parse("h1a0k"), Err(ParseUciMoveError::InvalidFormat("h1a0k".to_string())));
+        assert_eq!(UciMove::parse("h1a1v"), Err(ParseUciMoveError::InvalidFormat("h1a1v".to_string())));
+        assert_eq!(UciMove::parse("x1a1"), Err(ParseUciMoveError::InvalidFormat("x1a1".to_string())));
+    }
+}
