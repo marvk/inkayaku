@@ -107,7 +107,7 @@ impl ReferenceEngine {
 mod perft_debug {
     use std::collections::HashSet;
 
-    use marvk_chess_board::{move_to_san_reduced};
+    use marvk_chess_board::{move_to_san};
     use marvk_chess_board::board::{Bitboard, Move};
     use marvk_chess_core::fen::Fen;
 
@@ -133,7 +133,7 @@ mod perft_debug {
             bitboard.make(x);
 
             if bitboard.is_valid() {
-                move_to_san_reduced(&x);
+                move_to_san(&x);
                 println!("{}", bitboard);
             }
 
@@ -151,7 +151,7 @@ mod perft_debug {
         let mut bitboard = Bitboard::new(fen);
 
         let moves = bitboard.perft(depth);
-        let actual: HashSet<(String, u64)> = HashSet::from_iter(moves.iter().map(|t| (move_to_san_reduced(&t.0), t.1)));
+        let actual: HashSet<(String, u64)> = HashSet::from_iter(moves.iter().map(|t| (move_to_san(&t.0), t.1)));
         let expected: HashSet<(String, u64)> = HashSet::from_iter(REFERENCE_ENGINE.perft(fen, depth));
 
         let actual_moves = actual.iter().map(|t| t.0.clone()).collect::<HashSet<_>>();
@@ -171,13 +171,13 @@ mod perft_debug {
         if has_excess {
             println!("EXCESS:");
             for x in excess.iter() {
-                println!("{}", &moves.iter().find(|&mv| &move_to_san_reduced(&mv.0) == x).unwrap().0);
+                println!("{}", &moves.iter().find(|&mv| &move_to_san(&mv.0) == x).unwrap().0);
             }
         }
         if has_missing {
             println!("MISSING:");
             for x in missing.iter() {
-                println!("{}", &moves.iter().find(|&mv| &move_to_san_reduced(&mv.0) == x).unwrap().0);
+                println!("{}", &moves.iter().find(|&mv| &move_to_san(&mv.0) == x).unwrap().0);
             }
         }
 
@@ -200,10 +200,10 @@ mod perft_debug {
 
 
             let string = &wrong_count.first().unwrap().0;
-            let option = &moves.iter().find(|&mv| &move_to_san_reduced(&mv.0) == string).unwrap().0;
+            let option = &moves.iter().find(|&mv| &move_to_san(&mv.0) == string).unwrap().0;
 
 
-            println!("Going deeper into {}: ", move_to_san_reduced(option));
+            println!("Going deeper into {}: ", move_to_san(option));
             println!("{}", bitboard);
             bitboard.make(Move(option.0));
             println!("{}", bitboard);

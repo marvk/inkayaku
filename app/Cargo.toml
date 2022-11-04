@@ -6,6 +6,3 @@ edition = "2021"
 [dependencies]
 marvk-chess-board = { path = "../board" }
 marvk-chess-core = { path = "../core" }
-
-[profile.release]
-debug = true

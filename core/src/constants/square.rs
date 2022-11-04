@@ -130,7 +130,11 @@ impl Square {
             return None;
         }
 
-        match to_square_index_from_indices(file_index, rank_index) {
+        Self::by_index(to_square_index_from_indices(file_index, rank_index))
+    }
+
+    pub fn by_index(index: usize) -> Option<Square> {
+        match index {
             0 => Some(Self::A8),
             1 => Some(Self::B8),
             2 => Some(Self::C8),

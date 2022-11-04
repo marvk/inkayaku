@@ -33,8 +33,6 @@ impl Configuration {
 pub struct ConfigurationGenerator {
     square: Square,
     directions: [Direction; 4],
-    relevant_squares: Vec<Square>,
-    num_relevant_squares: usize,
     mask: u64,
     possible_configurations: Vec<u64>,
     num_possible_configurations: usize,
@@ -89,8 +87,6 @@ impl ConfigurationGenerator {
         Self {
             square,
             directions,
-            relevant_squares,
-            num_relevant_squares,
             mask,
             possible_configurations,
             num_possible_configurations,

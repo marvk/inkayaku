@@ -99,7 +99,7 @@ impl<'a> CommandParser<'a> {
     }
 
     fn peek(&self) -> Result<&str, ParserError> {
-        match self.queue.borrow().front().map(|&s| s) {
+        match self.queue.borrow().front().copied() {
             Some(result) => Ok(result),
             None => Err(UnexpectedEndOfCommand),
         }
@@ -138,13 +138,10 @@ impl<'a> CommandParser<'a> {
 
         let mut visited_tokens = HashSet::new();
 
-        println!("{:?}", go);
-
         loop {
             match self.next() {
                 Ok(token) if visited_tokens.contains(token) => return Err(DuplicatedToken(token.to_string())),
                 Ok(token) => {
-                    println!("{}", token);
                     match token {
                         "searchmoves" => go.search_moves = self.parse_moves_until_one_of_or_end(&Self::GO_TOKENS)?,
                         "ponder" => go.ponder = true,
@@ -166,7 +163,6 @@ impl<'a> CommandParser<'a> {
                 Err(error) => return Err(error),
             }
         }
-        println!("{:?}", go);
 
         Ok(GoCommand { go })
     }

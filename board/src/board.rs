@@ -1,6 +1,5 @@
 use std::char::from_digit;
 use std::fmt::{Debug, Display, Formatter};
-use std::ops::BitAnd;
 
 use marvk_chess_core::constants::color::Color;
 use marvk_chess_core::constants::colored_piece::ColoredPiece;
@@ -8,8 +7,9 @@ use marvk_chess_core::constants::piece::Piece;
 use marvk_chess_core::constants::square::Square;
 use marvk_chess_core::fen::Fen;
 
-use crate::{mask_and_shift_from_lowest_one_bit, move_to_san_reduced, piece_to_string, square_to_string};
+use crate::{mask_and_shift_from_lowest_one_bit, move_to_san, piece_to_string, square_to_string};
 use crate::board::constants::*;
+use crate::board::MoveFromSanError::{MoveDoesNotExist, MoveIsNotValid};
 use crate::board::precalculated::magic::{BISHOP_MAGICS, Magics, ROOK_MAGICS};
 use crate::board::precalculated::nonmagic::{BLACK_PAWN_NONMAGICS, KING_NONMAGICS, KNIGHT_NONMAGICS, Nonmagics, WHITE_PAWN_NONMAGICS};
 
@@ -86,6 +86,32 @@ impl Move {
 
     #[inline(always)]
     pub fn is_attack(&self) -> bool { self.get_piece_attacked() != 0 }
+
+    pub fn san(&self) -> String {
+        format!("{}{}{}", square_to_string(self.get_source_square()), square_to_string(self.get_target_square()), piece_to_string(self.get_promotion_piece()))
+    }
+
+    pub fn structs(&self) -> (Square, Square, Option<Piece>) {
+        (Square::by_index(self.get_source_square() as usize).unwrap(),
+         Square::by_index(self.get_target_square() as usize).unwrap(),
+         Piece::by_index(self.get_promotion_piece() as usize))
+    }
+}
+
+impl Debug for Move {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "{}",
+            self.san(),
+        )
+    }
+}
+
+#[derive(Eq, PartialEq, Debug)]
+pub enum MoveFromSanError {
+    MoveDoesNotExist(String),
+    MoveIsNotValid(Move),
 }
 
 #[derive(Eq, PartialEq, Copy, Clone, Debug)]
@@ -869,6 +895,26 @@ impl Bitboard {
         1 - self.turn
     }
 
+    pub fn find_move(&mut self, san: &str) -> Result<Move, MoveFromSanError> {
+        let san = san.trim();
+        let result = self.generate_pseudo_legal_moves().into_iter().find(|mv| mv.san() == san).ok_or_else(|| MoveDoesNotExist(san.to_string()))?;
+
+        self.make(result);
+        if !self.is_valid() {
+            return Err(MoveIsNotValid(result));
+        }
+        self.unmake(result);
+
+        Ok(result)
+    }
+
+    pub fn make_san(&mut self, san: &str) -> Result<(), MoveFromSanError> {
+        let mv = self.find_move(san)?;
+        self.make(mv);
+
+        Ok(())
+    }
+
     pub fn fen(&self) -> Fen {
         let mut result = String::new();
 
@@ -981,7 +1027,7 @@ impl Display for Move {
         write!(
             f,
             "Move({}) {{ piece_moved = {}, piece_attacked = {}, self_lost_king_side_castle = {}, self_lost_queen_side_castle = {}, opponent_lost_king_side_castle = {}, opponent_lost_queen_side_castle = {}, castle_move = {}, en_passant_attack = {}, source_square = {}, target_square = {}, halfmove_reset = {}, previous_halfmove = {}, previous_en_passant_square = {}, next_en_passant_square = {}, promotion_piece = {}}}",
-            move_to_san_reduced(&self),
+            move_to_san(&self),
             piece_to_string(self.get_piece_moved()),
             piece_to_string(self.get_piece_attacked()),
             self.get_self_lost_king_side_castle() != 0,

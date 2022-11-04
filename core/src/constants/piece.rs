@@ -5,16 +5,17 @@ use crate::constants::colored_piece::ColoredPiece;
 #[derive(Eq, PartialEq, Copy, Clone, Debug)]
 pub struct Piece {
     pub name: &'static str,
+    pub fen: char,
     pub index: u8,
 }
 
 impl Piece {
-    pub const PAWN: Self = Self { name: "Pawn", index: 0 };
-    pub const KNIGHT: Self = Self { name: "Knight", index: 1 };
-    pub const BISHOP: Self = Self { name: "Bishop", index: 2 };
-    pub const ROOK: Self = Self { name: "Rook", index: 3 };
-    pub const QUEEN: Self = Self { name: "Queen", index: 4 };
-    pub const KING: Self = Self { name: "King", index: 5 };
+    pub const PAWN: Self = Self { name: "Pawn", fen: 'p', index: 1 };
+    pub const KNIGHT: Self = Self { name: "Knight", fen: 'n', index: 2 };
+    pub const BISHOP: Self = Self { name: "Bishop", fen: 'b', index: 3 };
+    pub const ROOK: Self = Self { name: "Rook", fen: 'r', index: 4 };
+    pub const QUEEN: Self = Self { name: "Queen", fen: 'q', index: 5 };
+    pub const KING: Self = Self { name: "King", fen: 'k', index: 6 };
 
     pub fn as_color(&self, color: Color) -> ColoredPiece {
         match color {
@@ -66,7 +67,15 @@ impl Piece {
         }
     }
 
-    pub fn by_index<'a>(index: usize) -> &'a Piece {
-        &Self::PIECES[index]
+    pub fn by_index(index: usize) -> Option<Piece> {
+        match index {
+            1 => Some(Self::PAWN),
+            2 => Some(Self::KNIGHT),
+            3 => Some(Self::BISHOP),
+            4 => Some(Self::ROOK),
+            5 => Some(Self::QUEEN),
+            6 => Some(Self::KING),
+            _ => None
+        }
     }
 }

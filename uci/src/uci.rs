@@ -31,6 +31,10 @@ impl UciMove {
         Self { source, target, promote_to: Some(promote_to) }
     }
 
+    pub fn san(&self) -> String {
+        format!("{}{}{}", self.source.fen(), self.target.fen(), self.promote_to.map(|p| p.fen.to_string()).unwrap_or_else(|| " ".to_string()))
+    }
+
     pub fn parse(raw: &str) -> Result<UciMove, ParseUciMoveError> {
         let mut chars = raw.chars();
 
@@ -43,7 +47,7 @@ impl UciMove {
         let source = Square::by_chars(next_char()?, next_char()?).ok_or_else(produce_error)?;
         let target = Square::by_chars(next_char()?, next_char()?).ok_or_else(produce_error)?;
 
-        let promote_to= match next_char() {
+        let promote_to = match next_char() {
             Ok(c) => Some(Piece::by_char(c).ok_or_else(produce_error)?),
             Err(_) => None,
         };
@@ -85,9 +89,9 @@ pub struct Go {
 }
 
 impl Go {
-    pub const EMPTY:Go = Go::new(Vec::new(), false, None, None, None, None, None, None, None, None, None, false);
+    pub const EMPTY: Go = Go::new(Vec::new(), false, None, None, None, None, None, None, None, None, None, false);
 
-    pub const  fn new(search_moves: Vec<UciMove>, ponder: bool, white_time: Option<Duration>, black_time: Option<Duration>, white_increment: Option<Duration>, black_increment: Option<Duration>, moves_to_go: Option<u64>, depth: Option<u64>, nodes: Option<u64>, mate: Option<u64>, move_time: Option<Duration>, infinite: bool) -> Self {
+    pub const fn new(search_moves: Vec<UciMove>, ponder: bool, white_time: Option<Duration>, black_time: Option<Duration>, white_increment: Option<Duration>, black_increment: Option<Duration>, moves_to_go: Option<u64>, depth: Option<u64>, nodes: Option<u64>, mate: Option<u64>, move_time: Option<Duration>, infinite: bool) -> Self {
         Self { search_moves, ponder, white_time, black_time, white_increment, black_increment, moves_to_go, depth, nodes, mate, move_time, infinite }
     }
 }
@@ -249,7 +253,7 @@ pub enum UciCommand {
 impl UciCommand {}
 
 pub trait Engine {
-    fn accept(&self, command: UciCommand);
+    fn accept(&mut self, command: UciCommand);
 }
 
 pub trait UciTx {
@@ -257,17 +261,23 @@ pub trait UciTx {
     fn id_author(&self, author: &str);
     fn uci_ok(&self);
     fn ready_ok(&self);
-    fn best_move(&self, uci_move: &UciMove);
+    fn best_move(&self, uci_move: Option<UciMove>);
     fn best_move_with_ponder(&self, uci_move: &UciMove, ponder_uci_move: &UciMove);
     fn copy_protection(&self, copy_protection: ProtectionMessage);
     fn registration(&self, registration: ProtectionMessage);
     fn info(&self, info: &Info);
+    fn option_check(&self, name: &str, default: bool);
+    fn option_spin(&self, name: &str, default: i32, min: i32, max: i32);
+    fn option_combo(&self, name: &str, default: &str, vars: &[&str]);
+    fn option_button(&self, name: &str);
+    fn option_string(&self, name: &str, default: &str);
 }
 
 #[cfg(test)]
 mod tests {
     use marvk_chess_core::constants::piece::Piece;
     use marvk_chess_core::constants::square::Square;
+
     use crate::uci::{ParseUciMoveError, UciMove};
 
     #[test]

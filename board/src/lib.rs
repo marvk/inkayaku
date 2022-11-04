@@ -34,14 +34,14 @@ pub fn occupancy_to_string(occupancy: OccupancyBits) -> String {
 
 pub fn piece_to_string(piece_bits: PieceBits) -> String {
     match piece_bits {
-        NO_PIECE => "",
         PAWN => "p",
         KNIGHT => "n",
         BISHOP => "b",
         ROOK => "r",
         QUEEN => "q",
         KING => "k",
-        _ => "???",
+        NO_PIECE => "",
+        _ => "",
     }.to_string()
 }
 
@@ -49,8 +49,8 @@ pub fn square_to_string(square_shift_bits: SquareShiftBits) -> String {
     Square::SQUARES.get(square_shift_bits as usize).map(|s| s.fen()).unwrap_or_else(|| "-".to_string())
 }
 
-pub fn move_to_san_reduced(mv: &Move) -> String {
-    format!("{}{}{}", square_to_string(mv.get_source_square()), square_to_string(mv.get_target_square()), piece_to_string(mv.get_promotion_piece()))
+pub fn move_to_san(mv: &Move) -> String {
+    mv.san()
 }
 
 #[inline(always)]
