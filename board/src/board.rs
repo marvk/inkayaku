@@ -915,6 +915,14 @@ impl Bitboard {
         Ok(())
     }
 
+    pub fn make_all_san(&mut self, moves: &[String]) {
+        for mv in moves {
+            if let Err(error) = self.make_san(mv) {
+                return;
+            }
+        }
+    }
+
     pub fn fen(&self) -> Fen {
         let mut result = String::new();
 

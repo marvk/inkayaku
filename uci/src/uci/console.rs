@@ -5,30 +5,36 @@ use crate::uci::{CurrentLine, Info, ProtectionMessage, Score, UciCommand, UciMov
 use crate::uci::console::ConsoleUciRxError::{CommandParseError, SystemError};
 use crate::uci::parser::{CommandParser, ParserError};
 
+#[derive(Debug)]
 pub enum ConsoleUciRxError {
     SystemError(IoError),
     CommandParseError(ParserError),
 }
 
-pub struct ConsoleUciTx<Consumer: Fn(&str)> {
-    consumer: Consumer,
+pub struct ConsoleUciTx<FConsumer: Fn(&str), FDebugConsumer: Fn(&str)> {
+    consumer: FConsumer,
+    debug_consumer: FDebugConsumer,
 }
 
-impl<FConsumer: Fn(&str)> ConsoleUciTx<FConsumer> {
-    pub fn new(consumer: FConsumer) -> Self {
-        Self { consumer }
+impl<FConsumer: Fn(&str), FDebugConsumer: Fn(&str)> ConsoleUciTx<FConsumer, FDebugConsumer> {
+    pub fn new(consumer: FConsumer, error_consumer: FDebugConsumer) -> Self {
+        Self { consumer, debug_consumer: error_consumer }
     }
 
     fn tx(&self, message: &str) {
         (self.consumer)(message)
     }
 
+    fn tx_debug(&self, message: &str) {
+        (self.debug_consumer)(message);
+    }
+
     fn tx_options(&self, name: &str, the_type: &str, remainder: &str) {
-        self.tx(&format!("option name {} type {} {}", name, the_type, remainder).trim())
+        self.tx(format!("option name {} type {} {}", name, the_type, remainder).trim())
     }
 }
 
-impl<Consumer: Fn(&str)> UciTx for ConsoleUciTx<Consumer> {
+impl<FConsumer: Fn(&str), FDebugConsumer: Fn(&str)> UciTx for ConsoleUciTx<FConsumer, FDebugConsumer> {
     fn id_name(&self, name: &str) {
         if name.is_empty() {
             panic!()
@@ -146,6 +152,10 @@ impl<Consumer: Fn(&str)> UciTx for ConsoleUciTx<Consumer> {
     fn option_string(&self, name: &str, default: &str) {
         self.tx_options(name, "string", &format!("default {}", default))
     }
+
+    fn debug(&self, message: &str) {
+        self.tx_debug(message);
+    }
 }
 
 pub struct ConsoleUciRx<FRead: Fn() -> Result<String, IoError>, FOnCommand: Fn(Result<UciCommand, ConsoleUciRxError>)> {
@@ -161,7 +171,7 @@ impl<FRead: Fn() -> Result<String, IoError>, FOnCommand: Fn(Result<UciCommand, C
     pub fn start(&self) {
         loop {
             let command = self.read_next_command();
-            let is_quit = if let Ok(UciCommand::Quit) = command { true } else { false };
+            let is_quit = matches!(command, Ok(UciCommand::Quit));
             (self.on_command)(command);
 
             if is_quit {

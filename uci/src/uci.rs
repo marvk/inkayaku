@@ -271,6 +271,7 @@ pub trait UciTx {
     fn option_combo(&self, name: &str, default: &str, vars: &[&str]);
     fn option_button(&self, name: &str);
     fn option_string(&self, name: &str, default: &str);
+    fn debug(&self, message: &str);
 }
 
 #[cfg(test)]
