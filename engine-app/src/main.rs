@@ -1,19 +1,28 @@
+use std::borrow::{Borrow, BorrowMut};
 use std::cell::RefCell;
 use std::io::{Error, stdin};
-use std::sync::mpsc::channel;
+use std::sync::Arc;
+
 
 use marvk_chess_engine_lib::inkayaku::Inkayaku;
 use marvk_chess_uci::uci::console::{ConsoleUciRx, ConsoleUciTx};
 use marvk_chess_uci::uci::console::ConsoleUciRxError::CommandParseError;
-use marvk_chess_uci::uci::Engine;
+use marvk_chess_uci::uci::{Engine, UciTx};
 use marvk_chess_uci::uci::parser::ParserError::UnknownCommand;
+use marvk_chess_uci::uci::UciCommand::SetDebug;
 
 fn main() {
-    let tx = ConsoleUciTx::new(print_ln, print_err);
-    let engine = RefCell::new(Inkayaku::new(tx));
+    print_ln("Inkayaku by Marvin Kuhnke (see https://github.com/marvk/rust-chess)");
+    let tx = Arc::new(ConsoleUciTx::new(print_ln, print_err));
+    let engine = RefCell::new(Inkayaku::new(tx.clone()));
     let on_command = move |command_result| {
         match command_result {
-            Ok(command) => engine.borrow_mut().accept(command),
+            Ok(command) => {
+                if let SetDebug {debug}  = command {
+                    tx.set_debug(debug);
+                }
+                engine.borrow_mut().accept(command);
+            },
             Err(CommandParseError(UnknownCommand(command))) => eprintln!("Unknown Command: {}", command),
             Err(error) => eprintln!("Failed to parse command: {:?}", error),
         }

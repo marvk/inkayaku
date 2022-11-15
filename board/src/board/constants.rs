@@ -9,6 +9,7 @@ pub type PieceBits = u64;
 pub type MaskBits = u64;
 pub type ShiftBits = u32;
 pub type OccupancyBits = u64;
+pub type GameStageBits = usize;
 
 pub const WHITE: ColorBits = 0;
 pub const BLACK: ColorBits = 1;
@@ -47,6 +48,10 @@ pub const BLACK: ColorBits = 1;
 //               |      ------------------------------------------------------------> Next en passant square     } and get that information from the pawn move
 //               |
 //                ------------------------------------------------------------------> Promotion Piece
+
+pub const EARLY: GameStageBits = 0;
+pub const MID: GameStageBits = 1;
+pub const LATE: GameStageBits = 2;
 
 pub const NO_PIECE: PieceBits = 0;
 pub const PAWN: PieceBits = 1;

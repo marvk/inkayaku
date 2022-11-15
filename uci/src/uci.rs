@@ -74,18 +74,18 @@ impl Display for UciMove {
 
 #[derive(Debug, Eq, PartialEq)]
 pub struct Go {
-    search_moves: Vec<UciMove>,
-    ponder: bool,
-    white_time: Option<Duration>,
-    black_time: Option<Duration>,
-    white_increment: Option<Duration>,
-    black_increment: Option<Duration>,
-    moves_to_go: Option<u64>,
-    depth: Option<u64>,
-    nodes: Option<u64>,
-    mate: Option<u64>,
-    move_time: Option<Duration>,
-    infinite: bool,
+    pub search_moves: Vec<UciMove>,
+    pub ponder: bool,
+    pub white_time: Option<Duration>,
+    pub black_time: Option<Duration>,
+    pub white_increment: Option<Duration>,
+    pub black_increment: Option<Duration>,
+    pub moves_to_go: Option<u64>,
+    pub depth: Option<u64>,
+    pub nodes: Option<u64>,
+    pub mate: Option<u64>,
+    pub move_time: Option<Duration>,
+    pub infinite: bool,
 }
 
 impl Go {
@@ -115,39 +115,39 @@ impl Display for Bound {
     }
 }
 
-pub struct Info<'a> {
-    depth: Option<u32>,
-    selective_depth: Option<u32>,
-    time: Option<Duration>,
-    nodes: Option<u64>,
-    principal_variation: Option<&'a [UciMove]>,
-    multi_pv: Option<u32>,
-    score: Option<Score>,
-    current_move: Option<UciMove>,
-    current_move_number: Option<u32>,
-    hash_full: Option<u32>,
-    nps: Option<u64>,
-    table_hits: Option<u32>,
-    shredder_table_hits: Option<u32>,
-    cpu_load: Option<u32>,
-    string: Option<&'a str>,
-    refutation: Option<&'a [UciMove]>,
-    current_line: Option<CurrentLine<'a>>,
+pub struct Info {
+    pub depth: Option<u32>,
+    pub selective_depth: Option<u32>,
+    pub time: Option<Duration>,
+    pub nodes: Option<u64>,
+    pub principal_variation: Option<Vec<UciMove>>,
+    pub multi_pv: Option<u32>,
+    pub score: Option<Score>,
+    pub current_move: Option<UciMove>,
+    pub current_move_number: Option<u32>,
+    pub hash_full: Option<u32>,
+    pub nps: Option<u64>,
+    pub table_hits: Option<u32>,
+    pub shredder_table_hits: Option<u32>,
+    pub cpu_load: Option<u32>,
+    pub string: Option<String>,
+    pub refutation: Option<Vec<UciMove>>,
+    pub current_line: Option<CurrentLine>,
 }
 
-pub struct CurrentLine<'a> {
+pub struct CurrentLine {
     cpu_number: u32,
-    line: &'a [UciMove],
+    line: Vec<UciMove>,
 }
 
-impl<'a> CurrentLine<'a> {
-    pub fn new(cpu_number: u32, line: &'a [UciMove]) -> Self {
+impl CurrentLine {
+    pub fn new(cpu_number: u32, line: Vec<UciMove>) -> Self {
         Self { cpu_number, line }
     }
 }
 
-impl<'a> Info<'a> {
-    pub fn new(depth: u32, selective_depth: u32, time: Duration, nodes: u64, principal_variation: &'a [UciMove], multi_pv: u32, score: Score, current_move: UciMove, current_move_number: u32, hash_full: u32, nps: u64, table_hits: u32, shredder_table_hits: u32, cpu_load: u32, string: &'a str, refutation: &'a [UciMove], current_line_cpu_number: u32, current_line: &'a [UciMove]) -> Self {
+impl Info {
+    pub fn new(depth: u32, selective_depth: u32, time: Duration, nodes: u64, principal_variation: Vec<UciMove>, multi_pv: u32, score: Score, current_move: UciMove, current_move_number: u32, hash_full: u32, nps: u64, table_hits: u32, shredder_table_hits: u32, cpu_load: u32, string: String, refutation: Vec<UciMove>, current_line_cpu_number: u32, current_line: Vec<UciMove>) -> Self {
         Self {
             depth: Some(depth),
             selective_depth: Some(selective_depth),

@@ -205,7 +205,7 @@ mod perft_debug {
 
             println!("Going deeper into {}: ", move_to_san(option));
             println!("{}", bitboard);
-            bitboard.make(Move(option.0));
+            bitboard.make(*option);
             println!("{}", bitboard);
 
             let deep_fen = bitboard.fen();

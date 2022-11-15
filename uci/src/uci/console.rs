@@ -1,5 +1,8 @@
+use std::borrow::{Borrow, BorrowMut};
+use std::cell::RefCell;
 use std::fmt::Display;
 use std::io::Error as IoError;
+use std::sync::Mutex;
 
 use crate::uci::{CurrentLine, Info, ProtectionMessage, Score, UciCommand, UciMove, UciTx};
 use crate::uci::console::ConsoleUciRxError::{CommandParseError, SystemError};
@@ -14,11 +17,16 @@ pub enum ConsoleUciRxError {
 pub struct ConsoleUciTx<FConsumer: Fn(&str), FDebugConsumer: Fn(&str)> {
     consumer: FConsumer,
     debug_consumer: FDebugConsumer,
+    debug: Mutex<bool>,
 }
 
 impl<FConsumer: Fn(&str), FDebugConsumer: Fn(&str)> ConsoleUciTx<FConsumer, FDebugConsumer> {
     pub fn new(consumer: FConsumer, error_consumer: FDebugConsumer) -> Self {
-        Self { consumer, debug_consumer: error_consumer }
+        Self { consumer, debug_consumer: error_consumer, debug: Mutex::new(false) }
+    }
+
+    pub fn set_debug(&self, debug: bool) {
+        *self.debug.lock().unwrap() = debug;
     }
 
     fn tx(&self, message: &str) {
@@ -26,7 +34,9 @@ impl<FConsumer: Fn(&str), FDebugConsumer: Fn(&str)> ConsoleUciTx<FConsumer, FDeb
     }
 
     fn tx_debug(&self, message: &str) {
-        (self.debug_consumer)(message);
+        if *self.debug.lock().unwrap() {
+            (self.debug_consumer)(message);
+        }
     }
 
     fn tx_options(&self, name: &str, the_type: &str, remainder: &str) {
@@ -89,7 +99,7 @@ impl<FConsumer: Fn(&str), FDebugConsumer: Fn(&str)> UciTx for ConsoleUciTx<FCons
             }
         }
 
-        fn move_array_to_string(uci_moves: &[UciMove]) -> String {
+        fn move_array_to_string(uci_moves: &Vec<UciMove>) -> String {
             uci_moves.iter().map(|m| format!("{}", m)).collect::<Vec<_>>().join(" ")
         }
 
@@ -102,14 +112,14 @@ impl<FConsumer: Fn(&str), FDebugConsumer: Fn(&str)> UciTx for ConsoleUciTx<FCons
         }
 
         fn current_line_to_string(current_line: &CurrentLine) -> String {
-            format!("{} {}", current_line.cpu_number, move_array_to_string(current_line.line))
+            format!("{} {}", current_line.cpu_number, move_array_to_string(&current_line.line))
         }
 
         append_maybe(&mut msg, "depth", info.depth);
         append_maybe(&mut msg, "seldepth", info.selective_depth);
         append_maybe(&mut msg, "time", info.time.map(|d| d.as_millis()));
         append_maybe(&mut msg, "nodes", info.nodes);
-        append_maybe(&mut msg, "pv", info.principal_variation.map(move_array_to_string));
+        append_maybe(&mut msg, "pv", info.principal_variation.as_ref().map(move_array_to_string));
         append_maybe(&mut msg, "multipv", info.multi_pv);
         append_maybe(&mut msg, "score", info.score.map(score_to_string));
         append_maybe(&mut msg, "currmove", info.current_move.as_ref());
@@ -119,9 +129,9 @@ impl<FConsumer: Fn(&str), FDebugConsumer: Fn(&str)> UciTx for ConsoleUciTx<FCons
         append_maybe(&mut msg, "tbhits", info.table_hits);
         append_maybe(&mut msg, "sbhits", info.shredder_table_hits);
         append_maybe(&mut msg, "cpuload", info.cpu_load);
-        append_maybe(&mut msg, "refutation", info.refutation.map(move_array_to_string));
+        append_maybe(&mut msg, "refutation", info.refutation.as_ref().map(move_array_to_string));
         append_maybe(&mut msg, "currline", info.current_line.as_ref().map(current_line_to_string));
-        append_maybe(&mut msg, "string", info.string);
+        append_maybe(&mut msg, "string", info.string.as_ref());
 
         self.tx(&msg)
     }
