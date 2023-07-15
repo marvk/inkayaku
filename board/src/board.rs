@@ -76,7 +76,7 @@ impl Move {
     #[inline(always)]
     pub fn set_target_square(&mut self, value: SquareShiftBits) { self.0 |= (value as u64) << TARGET_SQUARE_SHIFT }
     #[inline(always)]
-    pub fn set_halfmove_reset(&mut self, value: u64) { self.0 |= value << HALFMOVE_RESET_SHIFT }
+    pub fn set_halfmove_reset(&mut self) { self.0 |= HALFMOVE_RESET_MASK }
     #[inline(always)]
     pub fn set_previous_halfmove(&mut self, value: u32) { self.0 |= (value << PREVIOUS_HALFMOVE_SHIFT) as u64 }
     #[inline(always)]
@@ -605,6 +605,10 @@ impl Bitboard {
         mv.set_previous_halfmove(self.halfmove_clock);
         mv.set_previous_en_passant_square(self.en_passant_square_shift);
         mv.set_promotion_piece(promote_to);
+
+        if piece_active == PAWN || piece_attacked != NO_PIECE {
+            mv.set_halfmove_reset();
+        }
 
         if passive.queen_side_castle && target_square_shift == (A8 + d_castle) {
             mv.set_opponent_lost_queen_side_castle();

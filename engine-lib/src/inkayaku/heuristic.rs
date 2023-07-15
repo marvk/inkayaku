@@ -136,9 +136,9 @@ impl SimpleHeuristic {
         [Self::WHITE_PAWN_TABLE_MID, Self::WHITE_KNIGHT_TABLE_MID, Self::WHITE_BISHOP_TABLE_MID, Self::WHITE_ROOK_TABLE_MID, Self::WHITE_QUEEN_TABLE_MID, Self::WHITE_KING_TABLE_LATE],
     ];
 
-    const BLACK_TABLES: [[[i32; 64]; 6]; 3] = Self::mirrored(Self::WHITE_TABLES);
+    const BLACK_TABLES: [[[i32; 64]; 6]; 3] = Self::mirror_and_flip_sign(Self::WHITE_TABLES);
 
-    const fn mirrored(tables: [[[i32; 64]; 6]; 3]) -> [[[i32; 64]; 6]; 3] {
+    const fn mirror_and_flip_sign(tables: [[[i32; 64]; 6]; 3]) -> [[[i32; 64]; 6]; 3] {
         const fn mirror_inner(table: [i32; 64]) -> [i32; 64] {
             let mut result = [0; 64];
 
@@ -146,7 +146,7 @@ impl SimpleHeuristic {
             while rank < 8 {
                 let mut file = 0;
                 while file < 8 {
-                    result[8 * (8 - rank - 1) + file] = table[8 * rank + file];
+                    result[8 * (8 - rank - 1) + file] = table[8 * rank + file] * -1;
                     file += 1;
                 }
                 rank += 1;
@@ -207,9 +207,9 @@ impl SimpleHeuristic {
         let total = white_sum + black_sum;
 
         if board.turn == WHITE {
-            total
-        } else {
             -total
+        } else {
+            total
         }
     }
 
@@ -237,10 +237,32 @@ impl SimpleHeuristic {
 
 impl Heuristic for SimpleHeuristic {
     fn evaluate_ongoing(&self, bitboard: &Bitboard) -> i32 {
+        println!("\n\n\n");
+
+
         let my_sum = Self::piece_value(&bitboard.white);
         let their_sum = Self::piece_value(&bitboard.black);
+        let psv = self.piece_square_value(bitboard);
+        println!("MY SUM    {}", my_sum);
+        println!("THEIR SUM {}", their_sum);
+        println!("PSV       {}", psv);
 
+        my_sum - their_sum + psv
+    }
+}
 
-        my_sum - their_sum + self.piece_square_value(bitboard)
+#[cfg(test)]
+mod test {
+    use marvk_chess_board::board::Bitboard;
+    use marvk_chess_core::fen::{Fen, FEN_STARTPOS};
+
+    use crate::inkayaku::heuristic::SimpleHeuristic;
+
+    #[test]
+    fn test_neutral_psv() {
+        let bitboard = Bitboard::new(&FEN_STARTPOS);
+        let sut = SimpleHeuristic {};
+        let actual_psv = sut.piece_square_value(&bitboard);
+        assert_eq!(actual_psv, 0);
     }
 }
