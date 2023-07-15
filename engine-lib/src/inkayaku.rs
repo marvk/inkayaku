@@ -347,7 +347,7 @@ impl<T: UciTx, H: Heuristic, M: MoveOrder> Search<T, H, M> {
     fn best_move(&mut self) -> Option<UciMove> {
         self.state.started_at = SystemTime::now();
 
-        let ply = self.params.go.depth.unwrap_or(7) as usize;
+        let ply = self.params.go.depth.unwrap_or(4) as usize;
 
         let best_move = self.negamax(&mut self.create_buffer(), ply, ply, self.heuristic.loss_score(), self.heuristic.win_score());
         self.state.metrics.increment_duration(&self.state.started_at.elapsed().unwrap());
@@ -393,6 +393,8 @@ impl<T: UciTx, H: Heuristic, M: MoveOrder> Search<T, H, M> {
 
         let mut alpha = alpha_original;
         let mut beta = beta_original;
+        println!("{}{}: initial alpha  {}", "    ".repeat(ply - depth), depth, alpha_original);
+        println!("{}{}: initial beta   {}", "    ".repeat(ply - depth), depth, beta_original);
 
         if let Some(tt_entry) = maybe_tt_entry {
             if tt_entry.depth >= depth {
@@ -401,10 +403,12 @@ impl<T: UciTx, H: Heuristic, M: MoveOrder> Search<T, H, M> {
                     NodeType::LOWERBOUND => alpha = max(alpha, tt_entry.value),
                     NodeType::UPPERBOUND => beta = min(beta, tt_entry.value),
                     NodeType::EXACT => {
+                        println!("{}{}: TT Hit", "    ".repeat(ply - depth), depth);
                         return tt_entry.mv.clone();
                     }
                 }
                 if alpha >= beta {
+                    println!("{}{}: TT Hit", "    ".repeat(ply - depth), depth);
                     return tt_entry.mv.clone();
                 }
             } else {}
@@ -414,28 +418,28 @@ impl<T: UciTx, H: Heuristic, M: MoveOrder> Search<T, H, M> {
 
         self.board().generate_pseudo_legal_moves_with_buffer(buffer);
 
-        println!("{}{}: {:?}", "    ".repeat(ply-depth), depth, buffer);
+        buffer.sort_by_key(|mv| mv.san());
+
+        println!("{}{}: {:?}", "    ".repeat(ply - depth), depth, buffer);
 
         if depth == 0 {
             let legal_moves_remaining = self.board().is_any_move_legal(buffer);
 
             if legal_moves_remaining && self.board().is_any_move_non_quiescent(buffer) {
                 self.state.metrics.increment_started_quiescence_search();
-                println!("{}{}: Q", "    ".repeat(ply-depth), depth);
-
+                println!("{}{}: Q ENTRY", "    ".repeat(ply - depth), depth);
+                println!("{}{}: initial alpha  {}", "    ".repeat(ply - depth), depth, alpha_original);
+                println!("{}{}: initial beta   {}", "    ".repeat(ply - depth), depth, beta_original);
                 return self.quiescence_search(0, buffer, alpha, beta);
             }
 
             let value = self::heuristic_factor(color) * self.heuristic.evaluate(&self.state.bitboard, legal_moves_remaining);
-
-            println!("\nmax depth");
-            println!("{:?}", self.state.bitboard.fen().fen);
-            println!("{}", value);
-
+            println!("{}{}: OUT OF DEPTH VALUE {}", "    ".repeat(ply - depth), depth, value);
             return ValuedMove::leaf(value);
         }
 
         self.move_order.sort(buffer);
+        println!("{}{}: {:?} (sorted)", "    ".repeat(ply - depth), depth, buffer);
 
         let mut best_value = self.heuristic.loss_score();
         let mut best_child: Option<ValuedMove> = None;
@@ -446,7 +450,7 @@ impl<T: UciTx, H: Heuristic, M: MoveOrder> Search<T, H, M> {
 
         for mv in buffer {
             self.board().make(*mv);
-            // println!("{}{}: {}", "    ".repeat(ply-depth), depth, mv.san());
+            println!("{}{}: {}", "    ".repeat(ply - depth), depth, mv.san());
             if !self.board().is_valid() {
                 self.board().unmake(*mv);
                 continue;
@@ -468,16 +472,17 @@ impl<T: UciTx, H: Heuristic, M: MoveOrder> Search<T, H, M> {
 
             self.board().unmake(*mv);
 
-            if alpha > beta {
+            println!("{}{}: alpha {} / beta {}", "    ".repeat(ply - depth), depth, alpha, beta);
+
+            if alpha >= beta {
+                println!("{}{}: PRUNE", "    ".repeat(ply - depth), depth);
                 break;
             }
         }
 
         if !legal_moves_encountered {
             let value = self::heuristic_factor(color) * self.heuristic.evaluate(&self.state.bitboard, false);
-            println!("\nno legal moves");
-            println!("{:?}", self.state.bitboard.fen().fen);
-            println!("{}", value);
+            println!("{}{}: OUT OF LEGAL MOVES VALUE {}", "    ".repeat(ply - depth), depth, value);
             return ValuedMove::leaf(value);
         }
 
@@ -497,22 +502,34 @@ impl<T: UciTx, H: Heuristic, M: MoveOrder> Search<T, H, M> {
 
         // TODO transposition table
 
+        println!("{}{}: TERMINATION VALUE {}", "    ".repeat(ply - depth), depth, best_value);
         result
     }
 
 
     fn quiescence_search(&mut self, depth: u32, buffer: &mut Vec<Move>, alpha_original: i32, beta_original: i32) -> ValuedMove {
+        println!("                    {}{}: {}", "    ".repeat(depth as usize), depth, self.state.bitboard.fen().fen);
         buffer.clear();
 
         // TODO take attack moves from buffer on first call
         self.board().generate_pseudo_legal_non_quiescent_moves_with_buffer(buffer);
 
+        buffer.sort_by_key(|mv| mv.san());
+        println!("                    {}{}: {:?}", "    ".repeat(depth as usize), depth, buffer);
+
         let standing_pat = self::heuristic_factor(self.state.bitboard.turn) * self.heuristic.evaluate(&self.state.bitboard, true);
+
+        println!("                    {}{}: standing pat   {}", "    ".repeat(depth as usize), depth, standing_pat);
+        println!("                    {}{}: initial alpha  {}", "    ".repeat(depth as usize), depth, alpha_original);
+        println!("                    {}{}: initial beta   {}", "    ".repeat(depth as usize), depth, beta_original);
 
         if standing_pat >= beta_original {
             self.state.metrics.register_quiescence_termination(depth as usize);
             return ValuedMove::leaf(beta_original);
         }
+
+        self.move_order.sort(buffer);
+        println!("                    {}{}: {:?} (sorted)", "    ".repeat(depth as usize), depth, buffer);
 
         let mut alpha = max(alpha_original, standing_pat);
 
@@ -603,27 +620,9 @@ impl ValuedMove {
 
 #[cfg(test)]
 mod test {
-    use std::cell::RefCell;
-    use std::sync::Arc;
     use marvk_chess_board::board::constants::{BLACK, WHITE};
-    use marvk_chess_uci::uci::console::ConsoleUciTx;
 
-    use crate::inkayaku::{heuristic_factor, Inkayaku};
-
-    fn print_ln(line: &str) {
-        println!("{}", line)
-    }
-
-    fn print_err(line: &str) {
-        eprintln!("DEBUG: {}", line)
-    }
-
-    #[test]
-    fn test() {
-        let tx = Arc::new(ConsoleUciTx::new(print_ln, print_err));
-        let engine = RefCell::new(Inkayaku::new(tx.clone()));
-
-    }
+    use crate::inkayaku::heuristic_factor;
 
     #[test]
     fn test_heuristic_factor() {

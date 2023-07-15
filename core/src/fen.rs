@@ -87,7 +87,7 @@ impl Fen {
 
     fn parse(fen: &str) -> Result<Captures, ParseFenError> {
         lazy_static! {
-            static ref FEN_REGEX: Regex = Regex::new(r"^([PNBRQKpnbrqk1-8]{1,8}(?:/[PNBRQKpnbrqk1-8]{1,8}){7}) ([bw]) (KQ?k?q?|Qk?q?|kq|q|-) ([a-h][1-8]|-)(?: (\d+) (\d+))?$").unwrap();
+            static ref FEN_REGEX: Regex = Regex::new(r"^([PNBRQKpnbrqk1-8]{1,8}(?:/[PNBRQKpnbrqk1-8]{1,8}){7}) ([bw]) (KQ?k?q?|Qk?q?|kq?|q|-) ([a-h][1-8]|-)(?: (\d+) (\d+))?$").unwrap();
         }
 
         match FEN_REGEX.captures(fen) {

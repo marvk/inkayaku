@@ -23,12 +23,6 @@ pub trait Heuristic {
                 self.evaluate_ongoing(bitboard)
             }
         } else {
-            println!("\nEvaluate...");
-            println!("{}", bitboard.fen().fen);
-            let color = if (bitboard.turn) == WHITE { "WHITE" } else { "BLACK" };
-            println!("active player {} is in check: {}", color, bitboard.is_current_in_check());
-            println!("active player {} has legal moves remaining: {}", color, legal_moves_remaining);
-
             match (bitboard.is_current_in_check(), bitboard.turn) {
                 (true, color) if color == WHITE => self.loss_score() + bitboard.fullmove_clock as i32,
                 (true, color) if color == BLACK => self.win_score() - bitboard.fullmove_clock as i32,
@@ -189,8 +183,8 @@ impl SimpleHeuristic {
         let black_has_queens_but_one_or_fewer_minor_pieces = black_has_queens && black_has_one_or_fewer_minor_pieces;
 
         if (!white_has_queens && !black_has_queens)
-            || (white_has_queens_but_one_or_fewer_minor_pieces && black_has_queens)
-            || (black_has_queens_but_one_or_fewer_minor_pieces && white_has_queens)
+            || (white_has_queens_but_one_or_fewer_minor_pieces && !black_has_queens)
+            || (black_has_queens_but_one_or_fewer_minor_pieces && !white_has_queens)
             || (white_has_one_or_fewer_minor_pieces && black_has_one_or_fewer_minor_pieces) {
             LATE
         } else {
@@ -201,16 +195,12 @@ impl SimpleHeuristic {
     fn piece_square_value(&self, board: &Bitboard) -> i32 {
         let stage = self.game_stage(board);
 
+        // println!("stage {}", stage);
+
         let white_sum = self.piece_square_sum_for_player(&board.white, &Self::WHITE_TABLES[stage]);
         let black_sum = self.piece_square_sum_for_player(&board.black, &Self::BLACK_TABLES[stage]);
 
-        let total = white_sum + black_sum;
-
-        if board.turn == WHITE {
-            -total
-        } else {
-            total
-        }
+        white_sum + black_sum
     }
 
     fn piece_square_sum_for_player(&self, player: &PlayerState, tables: &[[i32; 64]; 6]) -> i32 {
@@ -237,15 +227,12 @@ impl SimpleHeuristic {
 
 impl Heuristic for SimpleHeuristic {
     fn evaluate_ongoing(&self, bitboard: &Bitboard) -> i32 {
-        println!("\n\n\n");
-
-
         let my_sum = Self::piece_value(&bitboard.white);
         let their_sum = Self::piece_value(&bitboard.black);
         let psv = self.piece_square_value(bitboard);
-        println!("MY SUM    {}", my_sum);
-        println!("THEIR SUM {}", their_sum);
-        println!("PSV       {}", psv);
+        // println!("{}", my_sum);
+        // println!("{}", their_sum);
+        // println!("{}", psv);
 
         my_sum - their_sum + psv
     }
@@ -256,7 +243,7 @@ mod test {
     use marvk_chess_board::board::Bitboard;
     use marvk_chess_core::fen::{Fen, FEN_STARTPOS};
 
-    use crate::inkayaku::heuristic::SimpleHeuristic;
+    use crate::inkayaku::heuristic::{Heuristic, SimpleHeuristic};
 
     #[test]
     fn test_neutral_psv() {
@@ -264,5 +251,11 @@ mod test {
         let sut = SimpleHeuristic {};
         let actual_psv = sut.piece_square_value(&bitboard);
         assert_eq!(actual_psv, 0);
+    }
+
+    #[test]
+    fn evaluate() {
+        println!("{}", SimpleHeuristic {}.evaluate(&Bitboard::new(&Fen::new("rn2k2r/ppp2ppp/8/3pPP2/3P1q2/P1KB4/P1P4P/3R2N1 b kq - 0 14").unwrap()), true));
+        println!("{}", SimpleHeuristic {}.evaluate(&Bitboard::new(&Fen::new("rn2k2r/ppp2ppp/8/3pPP2/3P1q2/P1KB4/P1P4P/3R2N1 w kq - 0 14").unwrap()), true));
     }
 }

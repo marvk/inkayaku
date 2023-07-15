@@ -10,6 +10,6 @@ pub struct MvvLvaMoveOrder;
 
 impl MoveOrder for MvvLvaMoveOrder {
     fn sort(&self, moves: &mut Vec<Move>) {
-        moves.sort_by_key(|mv| Reverse(mv.0))
+        moves.sort_by_key(|mv| Reverse(mv.1))
     }
 }
