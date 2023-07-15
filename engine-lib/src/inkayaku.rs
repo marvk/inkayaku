@@ -401,10 +401,11 @@ impl<T: UciTx, H: Heuristic, M: MoveOrder> Search<T, H, M> {
                     NodeType::LOWERBOUND => alpha = max(alpha, tt_entry.value),
                     NodeType::UPPERBOUND => beta = min(beta, tt_entry.value),
                     NodeType::EXACT => {
-                        if alpha >= beta {
-                            return tt_entry.mv.clone();
-                        }
+                        return tt_entry.mv.clone();
                     }
+                }
+                if alpha >= beta {
+                    return tt_entry.mv.clone();
                 }
             } else {}
         };
@@ -425,7 +426,11 @@ impl<T: UciTx, H: Heuristic, M: MoveOrder> Search<T, H, M> {
                 return self.quiescence_search(0, buffer, alpha, beta);
             }
 
-            let value = Self::heuristic_factor(color) * self.heuristic.evaluate(&self.state.bitboard, legal_moves_remaining);
+            let value = self::heuristic_factor(color) * self.heuristic.evaluate(&self.state.bitboard, legal_moves_remaining);
+
+            println!("\nmax depth");
+            println!("{:?}", self.state.bitboard.fen().fen);
+            println!("{}", value);
 
             return ValuedMove::leaf(value);
         }
@@ -441,7 +446,7 @@ impl<T: UciTx, H: Heuristic, M: MoveOrder> Search<T, H, M> {
 
         for mv in buffer {
             self.board().make(*mv);
-            println!("{}{}: {}", "    ".repeat(ply-depth), depth, mv.san());
+            // println!("{}{}: {}", "    ".repeat(ply-depth), depth, mv.san());
             if !self.board().is_valid() {
                 self.board().unmake(*mv);
                 continue;
@@ -469,7 +474,11 @@ impl<T: UciTx, H: Heuristic, M: MoveOrder> Search<T, H, M> {
         }
 
         if !legal_moves_encountered {
-            return ValuedMove::leaf(Self::heuristic_factor(color) * self.heuristic.evaluate(&self.state.bitboard, false));
+            let value = self::heuristic_factor(color) * self.heuristic.evaluate(&self.state.bitboard, false);
+            println!("\nno legal moves");
+            println!("{:?}", self.state.bitboard.fen().fen);
+            println!("{}", value);
+            return ValuedMove::leaf(value);
         }
 
         let result = ValuedMove::new(best_value, best_move, best_child);
@@ -491,10 +500,6 @@ impl<T: UciTx, H: Heuristic, M: MoveOrder> Search<T, H, M> {
         result
     }
 
-    #[inline(always)]
-    fn heuristic_factor(color: ColorBits) -> i32 {
-        1 + (color as i32) * -2
-    }
 
     fn quiescence_search(&mut self, depth: u32, buffer: &mut Vec<Move>, alpha_original: i32, beta_original: i32) -> ValuedMove {
         buffer.clear();
@@ -502,7 +507,7 @@ impl<T: UciTx, H: Heuristic, M: MoveOrder> Search<T, H, M> {
         // TODO take attack moves from buffer on first call
         self.board().generate_pseudo_legal_non_quiescent_moves_with_buffer(buffer);
 
-        let standing_pat = Self::heuristic_factor(self.state.bitboard.turn) * self.heuristic.evaluate(&self.state.bitboard, true);
+        let standing_pat = self::heuristic_factor(self.state.bitboard.turn) * self.heuristic.evaluate(&self.state.bitboard, true);
 
         if standing_pat >= beta_original {
             self.state.metrics.register_quiescence_termination(depth as usize);
@@ -550,6 +555,11 @@ impl<T: UciTx, H: Heuristic, M: MoveOrder> Search<T, H, M> {
     }
 }
 
+#[inline(always)]
+fn heuristic_factor(color: ColorBits) -> i32 {
+    1 + (color as i32) * -2
+}
+
 fn principal_variation(valued_move: &ValuedMove) -> Vec<&Move> {
     let mut result = Vec::new();
 
@@ -587,5 +597,37 @@ impl ValuedMove {
 
     pub fn leaf(value: i32) -> Self {
         Self::new(value, None, None)
+    }
+}
+
+
+#[cfg(test)]
+mod test {
+    use std::cell::RefCell;
+    use std::sync::Arc;
+    use marvk_chess_board::board::constants::{BLACK, WHITE};
+    use marvk_chess_uci::uci::console::ConsoleUciTx;
+
+    use crate::inkayaku::{heuristic_factor, Inkayaku};
+
+    fn print_ln(line: &str) {
+        println!("{}", line)
+    }
+
+    fn print_err(line: &str) {
+        eprintln!("DEBUG: {}", line)
+    }
+
+    #[test]
+    fn test() {
+        let tx = Arc::new(ConsoleUciTx::new(print_ln, print_err));
+        let engine = RefCell::new(Inkayaku::new(tx.clone()));
+
+    }
+
+    #[test]
+    fn test_heuristic_factor() {
+        assert_eq!(heuristic_factor(BLACK), -1);
+        assert_eq!(heuristic_factor(WHITE), 1);
     }
 }

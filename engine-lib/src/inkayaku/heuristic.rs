@@ -23,6 +23,12 @@ pub trait Heuristic {
                 self.evaluate_ongoing(bitboard)
             }
         } else {
+            println!("\nEvaluate...");
+            println!("{}", bitboard.fen().fen);
+            let color = if (bitboard.turn) == WHITE { "WHITE" } else { "BLACK" };
+            println!("active player {} is in check: {}", color, bitboard.is_current_in_check());
+            println!("active player {} has legal moves remaining: {}", color, legal_moves_remaining);
+
             match (bitboard.is_current_in_check(), bitboard.turn) {
                 (true, color) if color == WHITE => self.loss_score() + bitboard.fullmove_clock as i32,
                 (true, color) if color == BLACK => self.win_score() - bitboard.fullmove_clock as i32,

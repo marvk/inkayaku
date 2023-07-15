@@ -856,7 +856,7 @@ impl Bitboard {
     }
 
     pub fn is_current_in_check(&self) -> bool {
-        !self._is_in_check_by_bits(self.turn)
+        self._is_in_check_by_bits(self.turn)
     }
 
     pub fn is_in_check(&self, color: Color) -> bool {
@@ -1282,6 +1282,38 @@ mod tests {
             let actual = Bitboard::new(&expected).fen();
             assert_eq!(actual, expected);
         }
+    }
+
+    #[test]
+    fn test_black_in_check() {
+        let fen_in_check = Fen::new("Q7/8/8/k1K5/8/8/8/8 b - - 2 1").unwrap();
+        let board = Bitboard::new(&fen_in_check);
+
+        assert_eq!(board.is_current_in_check(), true)
+    }
+
+    #[test]
+    fn test_white_in_check() {
+        let fen_in_check = Fen::new("q7/8/8/K1k5/8/8/8/8 w - - 1 1").unwrap();
+        let board = Bitboard::new(&fen_in_check);
+
+        assert_eq!(board.is_current_in_check(), true)
+    }
+
+    #[test]
+    fn test_black_not_in_check() {
+        let fen_in_check = Fen::new("1Q6/8/8/k1K5/8/8/8/8 b - - 2 1").unwrap();
+        let board = Bitboard::new(&fen_in_check);
+
+        assert_eq!(board.is_current_in_check(), false)
+    }
+
+    #[test]
+    fn test_white_not_in_check() {
+        let fen_in_check = Fen::new("1q6/8/8/K1k5/8/8/8/8 w - - 1 1").unwrap();
+        let board = Bitboard::new(&fen_in_check);
+
+        assert_eq!(board.is_current_in_check(), false)
     }
 }
 
