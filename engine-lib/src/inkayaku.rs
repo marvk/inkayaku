@@ -10,7 +10,7 @@ use marvk_chess_board::board::{Bitboard, Move, PlayerState};
 use marvk_chess_board::board::constants::{BLACK, ColorBits, WHITE};
 use marvk_chess_board::move_to_san;
 use marvk_chess_core::fen::Fen;
-use marvk_chess_uci::uci::{CurrentLine, Engine, Go, Info, ProtectionMessage, UciCommand, UciMove, UciTx};
+use marvk_chess_uci::uci::{CurrentLine, Engine, Go, Info, ProtectionMessage, Score, UciCommand, UciMove, UciTx};
 use SearchMessage::{UciGo, UciPositionFrom, UciUciNewGame};
 use UciCommand::*;
 use UciCommand::Go as GoCommand;
@@ -347,16 +347,19 @@ impl<T: UciTx, H: Heuristic, M: MoveOrder> Search<T, H, M> {
     fn best_move(&mut self) -> Option<UciMove> {
         self.state.started_at = SystemTime::now();
 
-        let ply = self.params.go.depth.unwrap_or(4) as usize;
+        let ply = self.params.go.depth.unwrap_or(6) as usize;
 
         let best_move = self.negamax(&mut self.create_buffer(), ply, ply, self.heuristic.loss_score(), self.heuristic.win_score());
         self.state.metrics.increment_duration(&self.state.started_at.elapsed().unwrap());
 
         let vec = principal_variation(&best_move).into_iter().map(|&mv| move_into_uci_move(mv)).collect::<Vec<_>>();
 
+        let debug = if self.debug { self.generate_info() } else { Info::EMPTY };
+
         self.uci_tx.info(&Info {
             current_line: Some(CurrentLine::new(1, vec)),
-            ..self.generate_info()
+            score: Some(Score::Centipawn { score: best_move.value }),
+            ..debug
         });
 
         best_move.mv.map(move_into_uci_move)
@@ -378,7 +381,13 @@ impl<T: UciTx, H: Heuristic, M: MoveOrder> Search<T, H, M> {
         }
     }
 
+    fn evaluate(&self, color: ColorBits, legal_moves_remaining: bool) -> i32 {
+        self::heuristic_factor(color) * self.heuristic.evaluate(&self.state.bitboard, legal_moves_remaining)
+    }
+
     fn negamax(&mut self, buffer: &mut Vec<Move>, depth: usize, ply: usize, alpha_original: i32, beta_original: i32) -> ValuedMove {
+        let color = self.board().turn;
+
         if self.state.metrics.last.negamax_nodes % 1000000 == 0 {
             self.check_messages();
             self.uci_tx.info(&self.generate_info());
@@ -414,8 +423,6 @@ impl<T: UciTx, H: Heuristic, M: MoveOrder> Search<T, H, M> {
             } else {}
         };
 
-        let color = self.state.bitboard.turn;
-
         self.board().generate_pseudo_legal_moves_with_buffer(buffer);
 
         buffer.sort_by_key(|mv| mv.san());
@@ -433,7 +440,7 @@ impl<T: UciTx, H: Heuristic, M: MoveOrder> Search<T, H, M> {
                 return self.quiescence_search(0, buffer, alpha, beta);
             }
 
-            let value = self::heuristic_factor(color) * self.heuristic.evaluate(&self.state.bitboard, legal_moves_remaining);
+            let value = self.evaluate(color, legal_moves_remaining);
             println!("{}{}: OUT OF DEPTH VALUE {}", "    ".repeat(ply - depth), depth, value);
             return ValuedMove::leaf(value);
         }
@@ -481,7 +488,7 @@ impl<T: UciTx, H: Heuristic, M: MoveOrder> Search<T, H, M> {
         }
 
         if !legal_moves_encountered {
-            let value = self::heuristic_factor(color) * self.heuristic.evaluate(&self.state.bitboard, false);
+            let value = self.evaluate(color, false);
             println!("{}{}: OUT OF LEGAL MOVES VALUE {}", "    ".repeat(ply - depth), depth, value);
             return ValuedMove::leaf(value);
         }
@@ -508,6 +515,7 @@ impl<T: UciTx, H: Heuristic, M: MoveOrder> Search<T, H, M> {
 
 
     fn quiescence_search(&mut self, depth: u32, buffer: &mut Vec<Move>, alpha_original: i32, beta_original: i32) -> ValuedMove {
+        let color = self.board().turn;
         println!("                    {}{}: {}", "    ".repeat(depth as usize), depth, self.state.bitboard.fen().fen);
         buffer.clear();
 
@@ -517,7 +525,7 @@ impl<T: UciTx, H: Heuristic, M: MoveOrder> Search<T, H, M> {
         buffer.sort_by_key(|mv| mv.san());
         println!("                    {}{}: {:?}", "    ".repeat(depth as usize), depth, buffer);
 
-        let standing_pat = self::heuristic_factor(self.state.bitboard.turn) * self.heuristic.evaluate(&self.state.bitboard, true);
+        let standing_pat = self.evaluate(color, true);
 
         println!("                    {}{}: standing pat   {}", "    ".repeat(depth as usize), depth, standing_pat);
         println!("                    {}{}: initial alpha  {}", "    ".repeat(depth as usize), depth, alpha_original);
