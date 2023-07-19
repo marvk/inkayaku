@@ -1,4 +1,3 @@
-use std::borrow::{Borrow, BorrowMut};
 use std::cell::RefCell;
 use std::io::{Error, stdin};
 use std::sync::Arc;
@@ -7,7 +6,7 @@ use std::sync::Arc;
 use marvk_chess_engine_lib::inkayaku::Inkayaku;
 use marvk_chess_uci::uci::console::{ConsoleUciRx, ConsoleUciTx};
 use marvk_chess_uci::uci::console::ConsoleUciRxError::CommandParseError;
-use marvk_chess_uci::uci::{Engine, UciTx};
+use marvk_chess_uci::uci::{Engine};
 use marvk_chess_uci::uci::parser::ParserError::UnknownCommand;
 use marvk_chess_uci::uci::UciCommand::SetDebug;
 

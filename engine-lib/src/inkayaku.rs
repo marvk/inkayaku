@@ -1,4 +1,3 @@
-use std::cell::RefCell;
 use std::cmp::{max, min};
 use std::sync::Arc;
 use std::sync::mpsc::{channel, Receiver, Sender};
@@ -6,9 +5,8 @@ use std::thread;
 use std::thread::JoinHandle;
 use std::time::{Duration, SystemTime};
 
-use marvk_chess_board::board::{Bitboard, Move, PlayerState};
+use marvk_chess_board::board::{Bitboard, Move};
 use marvk_chess_board::board::constants::{BLACK, ColorBits, WHITE};
-use marvk_chess_board::move_to_san;
 use marvk_chess_core::fen::Fen;
 use marvk_chess_uci::uci::{CurrentLine, Engine, Go, Info, ProtectionMessage, Score, UciCommand, UciMove, UciTx};
 use SearchMessage::{UciGo, UciPositionFrom, UciUciNewGame};
@@ -256,7 +254,7 @@ impl<T: UciTx, H: Heuristic, M: MoveOrder> Search<T, H, M> {
                     }
                     UciPositionFrom(fen, moves) => {
                         self.state.bitboard = Bitboard::new(&fen);
-                        self.state.bitboard.make_all_san(moves.iter().map(|mv| mv.san()).collect::<Vec<_>>().as_slice());
+                        self.state.bitboard.make_all_san(moves.iter().map(|mv| mv.to_string()).collect::<Vec<_>>().as_slice());
                     }
                     UciGo(go) => {
                         self.params.go = go;
@@ -354,12 +352,17 @@ impl<T: UciTx, H: Heuristic, M: MoveOrder> Search<T, H, M> {
 
         let vec = principal_variation(&best_move).into_iter().map(|&mv| move_into_uci_move(mv)).collect::<Vec<_>>();
 
-        let debug = if self.debug { self.generate_info() } else { Info::EMPTY };
+        let score =
+            self.heuristic
+                .find_mate_at_fullmove_clock(best_move.value, &self.state.bitboard)
+                .unwrap_or(Score::Centipawn { score: best_move.value });
 
         self.uci_tx.info(&Info {
-            current_line: Some(CurrentLine::new(1, vec)),
-            score: Some(Score::Centipawn { score: best_move.value }),
-            ..debug
+            principal_variation: Some(vec),
+            score: Some(score),
+            depth: Some(ply as u32),
+            string: self.debug_string(),
+            ..self.generate_info()
         });
 
         best_move.mv.map(move_into_uci_move)
@@ -370,15 +373,22 @@ impl<T: UciTx, H: Heuristic, M: MoveOrder> Search<T, H, M> {
             nodes: Some(self.state.metrics.last.total_nodes()),
             hash_full: Some((self.state.transposition_table.load_factor() * 1000.0) as u32),
             nps: Some(((self.state.metrics.last.total_nodes() as f64 / self.state.started_at.elapsed().unwrap().as_nanos() as f64) * 1_000_000_000.0) as u64),
-            string: Some(format!("tphitrate {} nrate {} qrate {} avgqdepth {} qstartedrate {}",
-                                 self.state.metrics.last.table_hit_rate(),
-                                 self.state.metrics.last.negamax_node_rate(),
-                                 self.state.metrics.last.quiescence_node_rate(),
-                                 self.state.metrics.last.average_quiescence_termination_ply(),
-                                 self.state.metrics.last.quiescence_started_rate(),
-            )),
             ..Info::EMPTY
         }
+    }
+
+    fn debug_string(&self) -> Option<String> {
+        if self.debug { Some(self.generate_debug()) } else { None }
+    }
+
+    fn generate_debug(&self) -> String {
+        format!("tphitrate {} nrate {} qrate {} avgqdepth {} qstartedrate {}",
+                self.state.metrics.last.table_hit_rate(),
+                self.state.metrics.last.negamax_node_rate(),
+                self.state.metrics.last.quiescence_node_rate(),
+                self.state.metrics.last.average_quiescence_termination_ply(),
+                self.state.metrics.last.quiescence_started_rate(),
+        )
     }
 
     fn evaluate(&self, color: ColorBits, legal_moves_remaining: bool) -> i32 {
@@ -390,7 +400,10 @@ impl<T: UciTx, H: Heuristic, M: MoveOrder> Search<T, H, M> {
 
         if self.state.metrics.last.negamax_nodes % 1000000 == 0 {
             self.check_messages();
-            self.uci_tx.info(&self.generate_info());
+            self.uci_tx.info(&Info {
+                time: Some(self.state.started_at.elapsed().unwrap()),
+                ..self.generate_info()
+            });
         }
 
         buffer.clear();
@@ -402,8 +415,6 @@ impl<T: UciTx, H: Heuristic, M: MoveOrder> Search<T, H, M> {
 
         let mut alpha = alpha_original;
         let mut beta = beta_original;
-        println!("{}{}: initial alpha  {}", "    ".repeat(ply - depth), depth, alpha_original);
-        println!("{}{}: initial beta   {}", "    ".repeat(ply - depth), depth, beta_original);
 
         if let Some(tt_entry) = maybe_tt_entry {
             if tt_entry.depth >= depth {
@@ -412,12 +423,10 @@ impl<T: UciTx, H: Heuristic, M: MoveOrder> Search<T, H, M> {
                     NodeType::LOWERBOUND => alpha = max(alpha, tt_entry.value),
                     NodeType::UPPERBOUND => beta = min(beta, tt_entry.value),
                     NodeType::EXACT => {
-                        println!("{}{}: TT Hit", "    ".repeat(ply - depth), depth);
                         return tt_entry.mv.clone();
                     }
                 }
                 if alpha >= beta {
-                    println!("{}{}: TT Hit", "    ".repeat(ply - depth), depth);
                     return tt_entry.mv.clone();
                 }
             } else {}
@@ -425,28 +434,20 @@ impl<T: UciTx, H: Heuristic, M: MoveOrder> Search<T, H, M> {
 
         self.board().generate_pseudo_legal_moves_with_buffer(buffer);
 
-        buffer.sort_by_key(|mv| mv.san());
-
-        println!("{}{}: {:?}", "    ".repeat(ply - depth), depth, buffer);
 
         if depth == 0 {
             let legal_moves_remaining = self.board().is_any_move_legal(buffer);
 
             if legal_moves_remaining && self.board().is_any_move_non_quiescent(buffer) {
                 self.state.metrics.increment_started_quiescence_search();
-                println!("{}{}: Q ENTRY", "    ".repeat(ply - depth), depth);
-                println!("{}{}: initial alpha  {}", "    ".repeat(ply - depth), depth, alpha_original);
-                println!("{}{}: initial beta   {}", "    ".repeat(ply - depth), depth, beta_original);
                 return self.quiescence_search(0, buffer, alpha, beta);
             }
 
             let value = self.evaluate(color, legal_moves_remaining);
-            println!("{}{}: OUT OF DEPTH VALUE {}", "    ".repeat(ply - depth), depth, value);
             return ValuedMove::leaf(value);
         }
 
         self.move_order.sort(buffer);
-        println!("{}{}: {:?} (sorted)", "    ".repeat(ply - depth), depth, buffer);
 
         let mut best_value = self.heuristic.loss_score();
         let mut best_child: Option<ValuedMove> = None;
@@ -457,7 +458,6 @@ impl<T: UciTx, H: Heuristic, M: MoveOrder> Search<T, H, M> {
 
         for mv in buffer {
             self.board().make(*mv);
-            println!("{}{}: {}", "    ".repeat(ply - depth), depth, mv.san());
             if !self.board().is_valid() {
                 self.board().unmake(*mv);
                 continue;
@@ -479,17 +479,14 @@ impl<T: UciTx, H: Heuristic, M: MoveOrder> Search<T, H, M> {
 
             self.board().unmake(*mv);
 
-            println!("{}{}: alpha {} / beta {}", "    ".repeat(ply - depth), depth, alpha, beta);
 
             if alpha >= beta {
-                println!("{}{}: PRUNE", "    ".repeat(ply - depth), depth);
                 break;
             }
         }
 
         if !legal_moves_encountered {
             let value = self.evaluate(color, false);
-            println!("{}{}: OUT OF LEGAL MOVES VALUE {}", "    ".repeat(ply - depth), depth, value);
             return ValuedMove::leaf(value);
         }
 
@@ -509,27 +506,19 @@ impl<T: UciTx, H: Heuristic, M: MoveOrder> Search<T, H, M> {
 
         // TODO transposition table
 
-        println!("{}{}: TERMINATION VALUE {}", "    ".repeat(ply - depth), depth, best_value);
         result
     }
 
 
     fn quiescence_search(&mut self, depth: u32, buffer: &mut Vec<Move>, alpha_original: i32, beta_original: i32) -> ValuedMove {
         let color = self.board().turn;
-        println!("                    {}{}: {}", "    ".repeat(depth as usize), depth, self.state.bitboard.fen().fen);
         buffer.clear();
 
         // TODO take attack moves from buffer on first call
         self.board().generate_pseudo_legal_non_quiescent_moves_with_buffer(buffer);
 
-        buffer.sort_by_key(|mv| mv.san());
-        println!("                    {}{}: {:?}", "    ".repeat(depth as usize), depth, buffer);
-
         let standing_pat = self.evaluate(color, true);
 
-        println!("                    {}{}: standing pat   {}", "    ".repeat(depth as usize), depth, standing_pat);
-        println!("                    {}{}: initial alpha  {}", "    ".repeat(depth as usize), depth, alpha_original);
-        println!("                    {}{}: initial beta   {}", "    ".repeat(depth as usize), depth, beta_original);
 
         if standing_pat >= beta_original {
             self.state.metrics.register_quiescence_termination(depth as usize);
@@ -537,7 +526,6 @@ impl<T: UciTx, H: Heuristic, M: MoveOrder> Search<T, H, M> {
         }
 
         self.move_order.sort(buffer);
-        println!("                    {}{}: {:?} (sorted)", "    ".repeat(depth as usize), depth, buffer);
 
         let mut alpha = max(alpha_original, standing_pat);
 
@@ -554,7 +542,6 @@ impl<T: UciTx, H: Heuristic, M: MoveOrder> Search<T, H, M> {
                 continue;
             }
 
-            println!("                    {}{}: {}", "    ".repeat(depth as usize), depth, mv.san());
 
             self.state.metrics.increment_quiescence_nodes();
 

@@ -1,6 +1,8 @@
 use marvk_chess_board::board::{Bitboard, PlayerState};
 use marvk_chess_board::board::constants::{BISHOP, BLACK, GameStageBits, KING, KNIGHT, LATE, MID, OccupancyBits, PAWN, QUEEN, ROOK, WHITE};
 use marvk_chess_board::mask_and_shift_from_lowest_one_bit;
+use marvk_chess_uci::uci::Score;
+use marvk_chess_uci::uci::Score::Mate;
 
 pub trait Heuristic {
     const MAX_FULL_MOVES: i32 = 1 << 20;
@@ -30,6 +32,7 @@ pub trait Heuristic {
             }
         }
     }
+    fn find_mate_at_fullmove_clock(&self, value: i32, bitboard: &Bitboard) -> Option<Score>;
 
     fn evaluate_ongoing(&self, bitboard: &Bitboard) -> i32;
 }
@@ -226,6 +229,15 @@ impl SimpleHeuristic {
 }
 
 impl Heuristic for SimpleHeuristic {
+    fn find_mate_at_fullmove_clock(&self, value: i32, bitboard: &Bitboard) -> Option<Score> {
+        if value.abs() > self.win_score() / 2 {
+            let offset = if value > 0 && bitboard.turn == WHITE { 1 } else { 0 };
+            Some(Mate { mate_in: (self.win_score() - value.abs() - bitboard.fullmove_clock as i32 + offset) * value.signum() })
+        } else {
+            None
+        }
+    }
+
     fn evaluate_ongoing(&self, bitboard: &Bitboard) -> i32 {
         let my_sum = Self::piece_value(&bitboard.white);
         let their_sum = Self::piece_value(&bitboard.black);

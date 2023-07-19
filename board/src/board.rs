@@ -983,9 +983,8 @@ impl Bitboard {
         Ok(result)
     }
 
-
-    pub fn make_san(&mut self, san: &str) -> Result<(), MoveFromSanError> {
-        let mv = self.find_move(san)?;
+    pub fn make_uci(&mut self, uci: &str) -> Result<(), MoveFromSanError> {
+        let mv = self.find_move(uci)?;
         self.make(mv);
 
         Ok(())
@@ -993,7 +992,7 @@ impl Bitboard {
 
     pub fn make_all_san(&mut self, moves: &[String]) {
         for mv in moves {
-            if let Err(error) = self.make_san(mv) {
+            if let Err(error) = self.make_uci(mv) {
                 return;
             }
         }

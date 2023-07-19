@@ -24,7 +24,7 @@ impl Zobrist {
     pub const WHITE_QUEEN_CASTLE_HASH: u64 = 0xcb3046dc8c54f87d;
     pub const BLACK_KING_CASTLE_HASH: u64 = 0x2cd08e6b1034a445;
     pub const BLACK_QUEEN_CASTLE_HASH: u64 = 0xe6d1cdeac4ec0b8a;
-    pub const BLACK_TO_MOVE_HASH: u64 = 0xe6d1cdeac4ec0b8a;
+    pub const BLACK_TO_MOVE_HASH: u64 = 0xaa56513abd96ba3;
 
     #[inline(always)]
     pub const fn piece_square_hash(piece: PieceBits, square: SquareShiftBits, color: ColorBits) -> u64 {
@@ -45,6 +45,7 @@ mod test {
     use rand::rngs::StdRng;
 
     #[test]
+    #[ignore]
     fn generate() {
         let mut hashes = HashSet::new();
         let mut rng: StdRng = SeedableRng::from_seed([0; 32]);
@@ -86,6 +87,6 @@ mod test {
         println!("pub const WHITE_QUEEN_CASTLE_HASH: u64 = {:#0x?};", white_queen_castle_hash);
         println!("pub const BLACK_KING_CASTLE_HASH: u64 = {:#0x?};", black_king_castle_hash);
         println!("pub const BLACK_QUEEN_CASTLE_HASH: u64 = {:#0x?};", black_queen_castle_hash);
-        println!("pub const BLACK_TO_MOVE: u64 = {:#0x?};", black_queen_castle_hash);
+        println!("pub const BLACK_TO_MOVE: u64 = {:#0x?};", black_to_move);
     }
 }

@@ -393,7 +393,6 @@ mod tests {
         run_test_for_simple_command("ucinewgame", UciNewGame);
     }
 
-
     #[test]
     fn stop() {
         run_test_for_simple_command("stop", Stop);

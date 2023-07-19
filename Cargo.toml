@@ -4,7 +4,9 @@ members = [
     "app",
     "board",
     "core",
-    "uci",
     "engine-app",
     "engine-lib",
+    "lichess-api",
+    "lichess-bot",
+    "uci",
 ]

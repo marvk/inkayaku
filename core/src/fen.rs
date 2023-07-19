@@ -35,6 +35,10 @@ impl Fen {
     }
 
     pub fn new(fen: &str) -> Result<Fen, ParseFenError> {
+        if fen == "startpos" {
+            return Ok(FEN_STARTPOS.clone());
+        }
+
         let fen = fen.to_string();
         let temp_fen = fen.clone();
         let captures = Self::parse(&temp_fen)?;

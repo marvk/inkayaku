@@ -15,3 +15,4 @@ crashlytics-build.properties
 fabric.properties
 *.iml
 references/**/*
+token

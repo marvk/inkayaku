@@ -9,13 +9,14 @@ use crate::uci::ParseUciMoveError::InvalidFormat;
 
 pub mod console;
 pub mod parser;
+pub mod message;
 
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub enum ParseUciMoveError {
     InvalidFormat(String)
 }
 
-#[derive(Debug, Eq, PartialEq)]
+#[derive(Debug, Eq, PartialEq, Clone)]
 pub struct UciMove {
     pub source: Square,
     pub target: Square,
@@ -29,10 +30,6 @@ impl UciMove {
 
     pub fn new_with_promotion(source: Square, target: Square, promote_to: Piece) -> Self {
         Self { source, target, promote_to: Some(promote_to) }
-    }
-
-    pub fn san(&self) -> String {
-        format!("{}{}{}", self.source.fen(), self.target.fen(), self.promote_to.map(|p| p.fen.to_string()).unwrap_or_else(|| " ".to_string()))
     }
 
     pub fn parse(raw: &str) -> Result<UciMove, ParseUciMoveError> {
@@ -67,12 +64,12 @@ impl Display for UciMove {
             "{}{}{}",
             self.source.fen(),
             self.target.fen(),
-            self.promote_to.as_ref().map(|m| m.uci_name().to_string()).unwrap_or("".to_string())
+            self.promote_to.as_ref().map(|m| m.uci_name().to_string()).unwrap_or_else(|| "".to_string())
         )
     }
 }
 
-#[derive(Debug, Eq, PartialEq)]
+#[derive(Debug, Eq, PartialEq, Default)]
 pub struct Go {
     pub search_moves: Vec<UciMove>,
     pub ponder: bool,
@@ -115,6 +112,7 @@ impl Display for Bound {
     }
 }
 
+#[derive(Debug, Eq, PartialEq, Clone)]
 pub struct Info {
     pub depth: Option<u32>,
     pub selective_depth: Option<u32>,
@@ -135,6 +133,7 @@ pub struct Info {
     pub current_line: Option<CurrentLine>,
 }
 
+#[derive(Debug, Eq, PartialEq, Clone)]
 pub struct CurrentLine {
     cpu_number: u32,
     line: Vec<UciMove>,
@@ -197,6 +196,7 @@ pub enum Score {
     Mate { mate_in: i32 },
 }
 
+#[derive(Debug, Eq, PartialEq)]
 pub enum ProtectionMessage {
     CHECKING,
     OK,
@@ -248,6 +248,25 @@ pub enum UciCommand {
     Stop,
     PonderHit,
     Quit,
+}
+
+#[derive(Debug, Eq, PartialEq)]
+pub enum UciTxCommand {
+    IdName { name: String },
+    IdAuthor { author: String },
+    Ok,
+    ReadyOk,
+    BestMove { uci_move: Option<UciMove> },
+    BestMoveWithPonder { uci_move: UciMove, ponder_uci_move: UciMove },
+    CopyProtection { copy_protection: ProtectionMessage },
+    Registration { registration: ProtectionMessage },
+    Info { info: Info },
+    OptionCheck { name: String, default: bool },
+    OptionSpin { name: String, default: i32, min: i32, max: i32 },
+    OptionCombo { name: String, default: String, vars: Vec<String> },
+    OptionButton { name: String },
+    OptionString { name: String, default: String },
+    Debug { message: String },
 }
 
 impl UciCommand {}
