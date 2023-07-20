@@ -49,8 +49,6 @@ pub mod perft {
 
     use crate::{expect, PerftResult};
 
-    const LIMIT: u64 = 200_000_000;
-
     pub fn run_all() {
         perft1();
 
@@ -72,12 +70,12 @@ pub mod perft {
         perft6();
         perft7();
 
-        println!("{:?}", start.elapsed());
+        println!("Full run: {:?}", start.elapsed());
     }
 
     pub fn perft1() {
         run_perft(
-            &"rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1",
+            "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1",
             &[
                 expect(20),
                 expect(400),
@@ -172,24 +170,30 @@ pub mod perft {
     }
 
     fn run_perft(fen_string: &str, expect: &[PerftResult]) {
+        let start = SystemTime::now();
+
         let fen = Fen::new(fen_string).unwrap();
         let mut board = Bitboard::new(&fen);
 
-        let n = expect.iter().filter(|result| result.nodes < LIMIT).count();
+        let n = expect.len();
         let actual =
             (1..=n)
                 .into_iter()
                 .map(|index| {
                     let mut result = PerftResult::new();
-                    _run_perft_recursive(&mut board, &mut result, &mut Vec::new(), index);
+                    run_perft_recursive(&mut board, &mut result, &mut Vec::new(), index);
                     result
                 })
                 .collect::<Vec<_>>();
 
-        assert_eq!(actual, expect.iter().cloned().take(n).collect::<Vec<_>>(), "Failed for {}", fen_string);
+        let nodes: u64 = expect.iter().map(|e| e.nodes).sum();
+
+        assert_eq!(actual, expect, "Failed for {}", fen_string);
+        let nps = (nodes / start.elapsed().unwrap().as_secs()) as f64 / 1000000.0;
+        println!("{:?} - {:.1} MM NPS", start.elapsed(), nps);
     }
 
-    fn _run_perft_recursive(board: &mut Bitboard, result: &mut PerftResult, buffer: &mut Vec<Move>, current_depth: usize) {
+    fn run_perft_recursive(board: &mut Bitboard, result: &mut PerftResult, buffer: &mut Vec<Move>, current_depth: usize) {
         if current_depth == 0 {
             result.nodes += 1;
             return;
@@ -202,7 +206,7 @@ pub mod perft {
             board.make(*mv);
 
             if board.is_valid() {
-                _run_perft_recursive(board, result, &mut next_buffer, current_depth - 1);
+                run_perft_recursive(board, result, &mut next_buffer, current_depth - 1);
                 next_buffer.clear();
             }
 

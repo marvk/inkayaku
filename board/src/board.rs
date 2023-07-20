@@ -292,7 +292,7 @@ impl Bitboard {
         buffer
     }
 
-    fn generate_legal_moves(&mut self) -> Vec<Move> {
+    pub fn generate_legal_moves(&mut self) -> Vec<Move> {
         self.generate_pseudo_legal_moves()
             .into_iter()
             .filter(|&mv| self.is_move_legal(mv))
@@ -1021,12 +1021,25 @@ impl Bitboard {
         Ok(())
     }
 
-    pub fn make_all_uci(&mut self, moves: &[String]) {
-        for mv in moves {
-            if let Err(error) = self.make_uci(mv) {
-                return;
-            }
+    pub fn make_all_uci(&mut self, moves: &[String]) -> Result<(), MoveFromUciError> {
+        let mut potential_unmake = Vec::new();
+
+        for uci in moves {
+            match self.find_move(uci) {
+                Ok(mv) => {
+                    self.make(mv);
+                    potential_unmake.push(mv);
+                }
+                Err(error) => {
+                    for mv in potential_unmake.iter().rev() {
+                        self.unmake(*mv);
+                    }
+                    return Err(error)
+                }
+            };
         }
+
+        Ok(())
     }
 
     pub fn uci_to_san(&mut self, uci: &str) -> Result<String, MoveFromUciError> {
@@ -1089,9 +1102,6 @@ impl Bitboard {
         let promotion_piece = promote_to.map(|p| p.as_color(Color::WHITE));
         let promotion_piece = promotion_piece.map(|p| p.fen.to_string()).unwrap_or_else(|| "".to_string());
         let check_str = if is_mate { "#" } else if is_check { "+" } else { "" };
-
-        dbg!(&Color::by_index(self.turn as usize));
-        dbg!(&piece);
 
         Ok(format!("{}{}{}{}{}{}", piece, disambiguation_symbol, capture, target_square, promotion_piece, check_str))
     }
