@@ -42,7 +42,7 @@ mod tests {
         order.sort(&mut moves);
 
         for mv in moves {
-            println!("{}", mv.to_san_string(&mut bitboard));
+            println!("{}", mv.to_pgn_string(&mut bitboard));
         }
     }
 }

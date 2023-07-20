@@ -3,6 +3,7 @@ use std::fmt::{Debug, Display, Formatter};
 
 use marvk_chess_core::constants::color::Color;
 use marvk_chess_core::constants::colored_piece::ColoredPiece;
+use marvk_chess_core::constants::file::File;
 use marvk_chess_core::constants::piece::Piece;
 use marvk_chess_core::constants::square::Square;
 use marvk_chess_core::fen::{Fen, FEN_STARTPOS};
@@ -96,8 +97,8 @@ impl Move {
         format!("{}{}{}", square_to_string(self.get_source_square()), square_to_string(self.get_target_square()), piece_to_string(self.get_promotion_piece()))
     }
 
-    pub fn to_san_string(&self, board: &mut Bitboard) -> String {
-        board.uci_to_san(&self.to_uci_string()).unwrap()
+    pub fn to_pgn_string(&self, board: &mut Bitboard) -> String {
+        board.uci_to_pgn(&self.to_uci_string()).unwrap()
     }
 
     pub fn structs(&self) -> (Square, Square, Option<Piece>) {
@@ -240,10 +241,10 @@ impl Default for Bitboard {
 // Instantiation
 impl Bitboard {
     pub fn new(fen: &Fen) -> Self {
-        let mut white = PlayerState::EMPTY.clone();
-        let mut black = PlayerState::EMPTY.clone();
+        let mut white = PlayerState::EMPTY;
+        let mut black = PlayerState::EMPTY;
 
-        fen.get_piece_placement().split("/").enumerate().for_each(|(rank_index, file)| {
+        fen.get_piece_placement().split('/').enumerate().for_each(|(rank_index, file)| {
             let mut file_index = 0;
 
             file.chars().into_iter().for_each(|c| {
@@ -628,7 +629,7 @@ impl Bitboard {
 
         let mut mv = Move {
             bits: 0,
-            mvvlva: 0
+            mvvlva: 0,
         };
 
         mv.set_en_passant_attack(is_en_passant_attack_mask);
@@ -1040,7 +1041,7 @@ impl Bitboard {
                     for mv in potential_unmake.iter().rev() {
                         self.unmake(*mv);
                     }
-                    return Err(error)
+                    return Err(error);
                 }
             };
         }
@@ -1048,7 +1049,7 @@ impl Bitboard {
         Ok(())
     }
 
-    pub fn uci_to_san(&mut self, uci: &str) -> Result<String, MoveFromUciError> {
+    pub fn uci_to_pgn(&mut self, uci: &str) -> Result<String, MoveFromUciError> {
         let uci = uci.trim();
         let moves = self.generate_pseudo_legal_moves();
         let result = *moves.iter().find(|mv| mv.to_uci_string() == uci).ok_or_else(|| MoveDoesNotExist(uci.to_string()))?;
@@ -1061,6 +1062,7 @@ impl Bitboard {
         let is_check = self.is_current_in_check();
         let is_mate = !self.is_any_move_legal(&self.generate_pseudo_legal_moves());
         self.unmake(result);
+
 
         let MoveStructs { from_square, to_square, from_piece, to_piece, promote_to } = MoveStructs::from(result);
 
@@ -1106,12 +1108,25 @@ impl Bitboard {
         let capture = if to_piece.is_some() { "x" } else { "" };
         let target_square = to_square.fen();
         let promotion_piece = promote_to.map(|p| p.as_color(Color::WHITE));
-        let promotion_piece = promotion_piece.map(|p| p.fen.to_string()).unwrap_or_else(|| "".to_string());
+        let promotion_piece = promotion_piece.map(|p| format!("={}", p.fen)).unwrap_or_else(|| "".to_string());
         let check_str = if is_mate { "#" } else if is_check { "+" } else { "" };
+
+        if matches!(from_piece, Piece::KING) {
+            let castle_move = match (from_square.file, to_square.file) {
+                (File::FILE_E, File::FILE_G) => Some("O-O"),
+                (File::FILE_E, File::FILE_C) => Some("O-O-O"),
+                _ => None
+            };
+
+            if let Some(castle_move) = castle_move {
+                return Ok(format!("{}{}", castle_move, check_str));
+            }
+        }
 
         Ok(format!("{}{}{}{}{}{}", piece, disambiguation_symbol, capture, target_square, promotion_piece, check_str))
     }
 
+    #[allow(clippy::wrong_self_convention)]
     pub fn is_any_move_legal(&mut self, moves: &[Move]) -> bool {
         for &mv in moves {
             if self.is_move_legal(mv) {
@@ -1123,6 +1138,7 @@ impl Bitboard {
     }
 
     #[inline(always)]
+    #[allow(clippy::wrong_self_convention)]
     pub fn is_move_legal(&mut self, mv: Move) -> bool {
         self.make(mv);
         let result = self.is_valid();
@@ -1131,6 +1147,7 @@ impl Bitboard {
         result
     }
 
+    #[allow(clippy::wrong_self_convention)]
     pub fn is_any_move_non_quiescent(&mut self, moves: &[Move]) -> bool {
         moves.iter().any(|mv| mv.is_attack() || mv.get_promotion_piece() != NO_PIECE)
     }
@@ -1386,61 +1403,87 @@ mod tests {
 
     #[test]
     #[ignore]
-    fn print_some_sans() {
+    fn print_some_pgns() {
         let fen = Fen::new("r4rk1/ppqnpp1p/6pb/4p3/5P2/2N4Q/PPP2P1P/2KR3R b - - 1 16").unwrap();
         let mut board = Bitboard::new(&fen);
 
         for mv in board.generate_legal_moves() {
-            println!("{}", mv.to_san_string(&mut board));
+            println!("{}", mv.to_pgn_string(&mut board));
         }
     }
 
     #[test]
-    fn test_san1() {
+    fn test_pgn1() {
         let fen = Fen::new("3q4/2P5/8/8/4Q2Q/k7/8/K6Q w - - 0 1").unwrap();
         let mut board = Bitboard::new(&fen);
 
-        assert_eq!(board.uci_to_san("e4e1"), Ok("Qee1".to_string()));
-        assert_eq!(board.uci_to_san("h4e1"), Ok("Qh4e1".to_string()));
-        assert_eq!(board.uci_to_san("h1e1"), Ok("Q1e1".to_string()));
-        assert_eq!(board.uci_to_san("c7c8q"), Ok("c8Q".to_string()));
-        assert_eq!(board.uci_to_san("c7d8n"), Ok("cxd8N".to_string()));
+        assert_eq!(board.uci_to_pgn("e4e1"), Ok("Qee1".to_string()));
+        assert_eq!(board.uci_to_pgn("h4e1"), Ok("Qh4e1".to_string()));
+        assert_eq!(board.uci_to_pgn("h1e1"), Ok("Q1e1".to_string()));
+        assert_eq!(board.uci_to_pgn("c7c8q"), Ok("c8=Q".to_string()));
+        assert_eq!(board.uci_to_pgn("c7d8n"), Ok("cxd8=N".to_string()));
     }
 
     #[test]
-    fn test_san2() {
+    fn test_pgn2() {
         let fen = Fen::new("8/8/5q2/4P1P1/8/k7/8/K7 w - - 0 1").unwrap();
         let mut board = Bitboard::new(&fen);
 
-        assert_eq!(board.uci_to_san("e5f6"), Ok("exf6".to_string()));
-        assert_eq!(board.uci_to_san("g5f6"), Ok("gxf6".to_string()));
+        assert_eq!(board.uci_to_pgn("e5f6"), Ok("exf6".to_string()));
+        assert_eq!(board.uci_to_pgn("g5f6"), Ok("gxf6".to_string()));
     }
 
     #[test]
-    fn test_san3() {
+    fn test_pgn3() {
         let fen = Fen::new("8/8/8/1PpP4/8/k7/8/K7 w - c6 0 2").unwrap();
         let mut board = Bitboard::new(&fen);
 
-        assert_eq!(board.uci_to_san("d5c6"), Ok("dxc6".to_string()));
-        assert_eq!(board.uci_to_san("b5c6"), Ok("bxc6".to_string()));
+        assert_eq!(board.uci_to_pgn("d5c6"), Ok("dxc6".to_string()));
+        assert_eq!(board.uci_to_pgn("b5c6"), Ok("bxc6".to_string()));
     }
 
     #[test]
-    fn test_san4() {
+    fn test_pgn4() {
         let fen = Fen::new("1Q6/8/8/8/8/k1K1B3/8/8 w - - 0 1").unwrap();
         let mut board = Bitboard::new(&fen);
 
-        assert_eq!(board.uci_to_san("b8a8"), Ok("Qa8#".to_string()));
-        assert_eq!(board.uci_to_san("e3c5"), Ok("Bc5+".to_string()));
+        assert_eq!(board.uci_to_pgn("b8a8"), Ok("Qa8#".to_string()));
+        assert_eq!(board.uci_to_pgn("e3c5"), Ok("Bc5+".to_string()));
     }
 
     #[test]
-    fn test_san5() {
+    fn test_pgn5() {
         let fen = Fen::new("1q6/8/8/8/8/K1k1b3/8/8 b - - 0 1").unwrap();
         let mut board = Bitboard::new(&fen);
 
-        assert_eq!(board.uci_to_san("b8a8"), Ok("Qa8#".to_string()));
-        assert_eq!(board.uci_to_san("e3c5"), Ok("Bc5+".to_string()));
+        assert_eq!(board.uci_to_pgn("b8a8"), Ok("Qa8#".to_string()));
+        assert_eq!(board.uci_to_pgn("e3c5"), Ok("Bc5+".to_string()));
+    }
+
+    #[test]
+    fn test_pgn_castle_white() {
+        let fen = Fen::new("r3k2r/8/8/8/8/8/8/R3K2R w KQkq - 0 1").unwrap();
+        let mut board = Bitboard::new(&fen);
+
+        assert_eq!(board.uci_to_pgn("e1g1"), Ok("O-O".to_string()));
+        assert_eq!(board.uci_to_pgn("e1c1"), Ok("O-O-O".to_string()));
+    }
+
+    #[test]
+    fn test_pgn_castle_white_to_mate() {
+        let fen = Fen::new("8/8/8/8/8/8/7R/k3K2R w K - 0 1").unwrap();
+        let mut board = Bitboard::new(&fen);
+
+        assert_eq!(board.uci_to_pgn("e1g1"), Ok("O-O#".to_string()));
+    }
+
+    #[test]
+    fn test_pgn_castle_black() {
+        let fen = Fen::new("r3k2r/8/8/8/8/8/8/R3K2R b KQkq - 0 1").unwrap();
+        let mut board = Bitboard::new(&fen);
+
+        assert_eq!(board.uci_to_pgn("e8g8"), Ok("O-O".to_string()));
+        assert_eq!(board.uci_to_pgn("e8c8"), Ok("O-O-O".to_string()));
     }
 
     #[test]
