@@ -198,8 +198,6 @@ impl SimpleHeuristic {
     fn piece_square_value(&self, board: &Bitboard) -> i32 {
         let stage = self.game_stage(board);
 
-        // println!("stage {}", stage);
-
         let white_sum = self.piece_square_sum_for_player(&board.white, &Self::WHITE_TABLES[stage]);
         let black_sum = self.piece_square_sum_for_player(&board.black, &Self::BLACK_TABLES[stage]);
 
@@ -242,9 +240,6 @@ impl Heuristic for SimpleHeuristic {
         let my_sum = Self::piece_value(&bitboard.white);
         let their_sum = Self::piece_value(&bitboard.black);
         let psv = self.piece_square_value(bitboard);
-        // println!("{}", my_sum);
-        // println!("{}", their_sum);
-        // println!("{}", psv);
 
         my_sum - their_sum + psv
     }

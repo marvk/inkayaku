@@ -23,17 +23,11 @@ async fn main() {
     let event_stream = api.stream_incoming_events().await.unwrap();
 
     pin_mut!(event_stream);
-    println!("a");
+
     while let Some(value) = event_stream.next().await {
-        println!("b");
-
-        println!("e");
-
         match value {
             BotEvent::Challenge { challenge, compat: _compat } => {
-                println!("c");
                 let id = challenge.id;
-                println!("d");
                 api.post_accept_challenge(&id).await.unwrap_or_default();
             }
             BotEvent::GameStart { game } => {

@@ -1,7 +1,7 @@
 [workspace]
 
 members = [
-    "app",
+    "board-perft",
     "board",
     "core",
     "engine-app",

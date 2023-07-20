@@ -1,5 +1,5 @@
 [package]
-name = "marvk-chess-app"
+name = "marvk-chess-board-perft"
 version = "0.1.0"
 edition = "2021"
 
