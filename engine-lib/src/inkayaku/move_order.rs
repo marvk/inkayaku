@@ -14,7 +14,7 @@ pub struct MvvLvaMoveOrder;
 impl MvvLvaMoveOrder {
     #[inline(always)]
     fn eval(mv: &Move) -> i32 {
-        mv.1
+        mv.mvvlva
     }
 }
 

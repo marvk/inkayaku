@@ -19,72 +19,75 @@ mod precalculated;
 mod zobrist;
 
 #[derive(Eq, PartialEq, Hash, Copy, Clone)]
-pub struct Move(pub u64, pub i32);
+pub struct Move {
+    pub bits: u64,
+    pub mvvlva: i32,
+}
 
 impl Move {
-    pub const NULL: Move = Move(0, 0);
+    pub const NULL: Move = Move { bits: 0, mvvlva: 0 };
 
     #[inline(always)]
-    pub fn get_piece_moved(&self) -> PieceBits { (self.0 & PIECE_MOVED_MASK) >> PIECE_MOVED_SHIFT }
+    pub fn get_piece_moved(&self) -> PieceBits { (self.bits & PIECE_MOVED_MASK) >> PIECE_MOVED_SHIFT }
     #[inline(always)]
-    pub fn get_piece_attacked(&self) -> PieceBits { (self.0 & PIECE_ATTACKED_MASK) >> PIECE_ATTACKED_SHIFT }
+    pub fn get_piece_attacked(&self) -> PieceBits { (self.bits & PIECE_ATTACKED_MASK) >> PIECE_ATTACKED_SHIFT }
     #[inline(always)]
-    pub fn get_self_lost_king_side_castle(&self) -> u64 { (self.0 & SELF_LOST_KING_SIDE_CASTLE_MASK) >> SELF_LOST_KING_SIDE_CASTLE_SHIFT }
+    pub fn get_self_lost_king_side_castle(&self) -> u64 { (self.bits & SELF_LOST_KING_SIDE_CASTLE_MASK) >> SELF_LOST_KING_SIDE_CASTLE_SHIFT }
     #[inline(always)]
-    pub fn get_self_lost_queen_side_castle(&self) -> u64 { (self.0 & SELF_LOST_QUEEN_SIDE_CASTLE_MASK) >> SELF_LOST_QUEEN_SIDE_CASTLE_SHIFT }
+    pub fn get_self_lost_queen_side_castle(&self) -> u64 { (self.bits & SELF_LOST_QUEEN_SIDE_CASTLE_MASK) >> SELF_LOST_QUEEN_SIDE_CASTLE_SHIFT }
     #[inline(always)]
-    pub fn get_opponent_lost_king_side_castle(&self) -> u64 { (self.0 & OPPONENT_LOST_KING_SIDE_CASTLE_MASK) >> OPPONENT_LOST_KING_SIDE_CASTLE_SHIFT }
+    pub fn get_opponent_lost_king_side_castle(&self) -> u64 { (self.bits & OPPONENT_LOST_KING_SIDE_CASTLE_MASK) >> OPPONENT_LOST_KING_SIDE_CASTLE_SHIFT }
     #[inline(always)]
-    pub fn get_opponent_lost_queen_side_castle(&self) -> u64 { (self.0 & OPPONENT_LOST_QUEEN_SIDE_CASTLE_MASK) >> OPPONENT_LOST_QUEEN_SIDE_CASTLE_SHIFT }
+    pub fn get_opponent_lost_queen_side_castle(&self) -> u64 { (self.bits & OPPONENT_LOST_QUEEN_SIDE_CASTLE_MASK) >> OPPONENT_LOST_QUEEN_SIDE_CASTLE_SHIFT }
     #[inline(always)]
-    pub fn get_castle_move(&self) -> u64 { (self.0 & CASTLE_MOVE_MASK) >> CASTLE_MOVE_SHIFT }
+    pub fn get_castle_move(&self) -> u64 { (self.bits & CASTLE_MOVE_MASK) >> CASTLE_MOVE_SHIFT }
     #[inline(always)]
-    pub fn get_en_passant_attack(&self) -> u64 { (self.0 & EN_PASSANT_ATTACK_MASK) >> EN_PASSANT_ATTACK_SHIFT }
+    pub fn get_en_passant_attack(&self) -> u64 { (self.bits & EN_PASSANT_ATTACK_MASK) >> EN_PASSANT_ATTACK_SHIFT }
     #[inline(always)]
-    pub fn get_source_square(&self) -> SquareShiftBits { ((self.0 & SOURCE_SQUARE_MASK) >> SOURCE_SQUARE_SHIFT) as SquareShiftBits }
+    pub fn get_source_square(&self) -> SquareShiftBits { ((self.bits & SOURCE_SQUARE_MASK) >> SOURCE_SQUARE_SHIFT) as SquareShiftBits }
     #[inline(always)]
-    pub fn get_target_square(&self) -> SquareShiftBits { ((self.0 & TARGET_SQUARE_MASK) >> TARGET_SQUARE_SHIFT) as SquareShiftBits }
+    pub fn get_target_square(&self) -> SquareShiftBits { ((self.bits & TARGET_SQUARE_MASK) >> TARGET_SQUARE_SHIFT) as SquareShiftBits }
     #[inline(always)]
-    pub fn get_halfmove_reset(&self) -> u64 { (self.0 & HALFMOVE_RESET_MASK) >> HALFMOVE_RESET_SHIFT }
+    pub fn get_halfmove_reset(&self) -> u64 { (self.bits & HALFMOVE_RESET_MASK) >> HALFMOVE_RESET_SHIFT }
     #[inline(always)]
-    pub fn get_previous_halfmove(&self) -> u32 { ((self.0 & PREVIOUS_HALFMOVE_MASK) >> PREVIOUS_HALFMOVE_SHIFT) as u32 }
+    pub fn get_previous_halfmove(&self) -> u32 { ((self.bits & PREVIOUS_HALFMOVE_MASK) >> PREVIOUS_HALFMOVE_SHIFT) as u32 }
     #[inline(always)]
-    pub fn get_previous_en_passant_square(&self) -> SquareShiftBits { ((self.0 & PREVIOUS_EN_PASSANT_SQUARE_MASK) >> PREVIOUS_EN_PASSANT_SQUARE_SHIFT) as SquareShiftBits }
+    pub fn get_previous_en_passant_square(&self) -> SquareShiftBits { ((self.bits & PREVIOUS_EN_PASSANT_SQUARE_MASK) >> PREVIOUS_EN_PASSANT_SQUARE_SHIFT) as SquareShiftBits }
     #[inline(always)]
-    pub fn get_next_en_passant_square(&self) -> SquareShiftBits { ((self.0 & NEXT_EN_PASSANT_SQUARE_MASK) >> NEXT_EN_PASSANT_SQUARE_SHIFT) as SquareShiftBits }
+    pub fn get_next_en_passant_square(&self) -> SquareShiftBits { ((self.bits & NEXT_EN_PASSANT_SQUARE_MASK) >> NEXT_EN_PASSANT_SQUARE_SHIFT) as SquareShiftBits }
     #[inline(always)]
-    pub fn get_promotion_piece(&self) -> PieceBits { (self.0 & PROMOTION_PIECE_MASK) >> PROMOTION_PIECE_SHIFT }
+    pub fn get_promotion_piece(&self) -> PieceBits { (self.bits & PROMOTION_PIECE_MASK) >> PROMOTION_PIECE_SHIFT }
 
     #[inline(always)]
-    pub fn set_piece_moved(&mut self, value: PieceBits) { self.0 |= value << PIECE_MOVED_SHIFT }
+    pub fn set_piece_moved(&mut self, value: PieceBits) { self.bits |= value << PIECE_MOVED_SHIFT }
     #[inline(always)]
-    pub fn set_piece_attacked(&mut self, value: PieceBits) { self.0 |= value << PIECE_ATTACKED_SHIFT }
+    pub fn set_piece_attacked(&mut self, value: PieceBits) { self.bits |= value << PIECE_ATTACKED_SHIFT }
     #[inline(always)]
-    pub fn set_self_lost_king_side_castle(&mut self) { self.0 |= SELF_LOST_KING_SIDE_CASTLE_MASK }
+    pub fn set_self_lost_king_side_castle(&mut self) { self.bits |= SELF_LOST_KING_SIDE_CASTLE_MASK }
     #[inline(always)]
-    pub fn set_self_lost_queen_side_castle(&mut self) { self.0 |= SELF_LOST_QUEEN_SIDE_CASTLE_MASK }
+    pub fn set_self_lost_queen_side_castle(&mut self) { self.bits |= SELF_LOST_QUEEN_SIDE_CASTLE_MASK }
     #[inline(always)]
-    pub fn set_opponent_lost_king_side_castle(&mut self) { self.0 |= OPPONENT_LOST_KING_SIDE_CASTLE_MASK }
+    pub fn set_opponent_lost_king_side_castle(&mut self) { self.bits |= OPPONENT_LOST_KING_SIDE_CASTLE_MASK }
     #[inline(always)]
-    pub fn set_opponent_lost_queen_side_castle(&mut self) { self.0 |= OPPONENT_LOST_QUEEN_SIDE_CASTLE_MASK }
+    pub fn set_opponent_lost_queen_side_castle(&mut self) { self.bits |= OPPONENT_LOST_QUEEN_SIDE_CASTLE_MASK }
     #[inline(always)]
-    pub fn set_castle_move(&mut self, value: u64) { self.0 |= value }
+    pub fn set_castle_move(&mut self, value: u64) { self.bits |= value }
     #[inline(always)]
-    pub fn set_en_passant_attack(&mut self, value: u64) { self.0 |= value }
+    pub fn set_en_passant_attack(&mut self, value: u64) { self.bits |= value }
     #[inline(always)]
-    pub fn set_source_square(&mut self, value: SquareShiftBits) { self.0 |= (value as u64) << SOURCE_SQUARE_SHIFT }
+    pub fn set_source_square(&mut self, value: SquareShiftBits) { self.bits |= (value as u64) << SOURCE_SQUARE_SHIFT }
     #[inline(always)]
-    pub fn set_target_square(&mut self, value: SquareShiftBits) { self.0 |= (value as u64) << TARGET_SQUARE_SHIFT }
+    pub fn set_target_square(&mut self, value: SquareShiftBits) { self.bits |= (value as u64) << TARGET_SQUARE_SHIFT }
     #[inline(always)]
-    pub fn set_halfmove_reset(&mut self) { self.0 |= HALFMOVE_RESET_MASK }
+    pub fn set_halfmove_reset(&mut self) { self.bits |= HALFMOVE_RESET_MASK }
     #[inline(always)]
-    pub fn set_previous_halfmove(&mut self, value: u32) { self.0 |= (value << PREVIOUS_HALFMOVE_SHIFT) as u64 }
+    pub fn set_previous_halfmove(&mut self, value: u32) { self.bits |= (value << PREVIOUS_HALFMOVE_SHIFT) as u64 }
     #[inline(always)]
-    pub fn set_previous_en_passant_square(&mut self, value: SquareShiftBits) { self.0 |= (value as u64) << PREVIOUS_EN_PASSANT_SQUARE_SHIFT }
+    pub fn set_previous_en_passant_square(&mut self, value: SquareShiftBits) { self.bits |= (value as u64) << PREVIOUS_EN_PASSANT_SQUARE_SHIFT }
     #[inline(always)]
-    pub fn set_next_en_passant_square(&mut self, value: SquareShiftBits) { self.0 |= (value as u64) << NEXT_EN_PASSANT_SQUARE_SHIFT }
+    pub fn set_next_en_passant_square(&mut self, value: SquareShiftBits) { self.bits |= (value as u64) << NEXT_EN_PASSANT_SQUARE_SHIFT }
     #[inline(always)]
-    pub fn set_promotion_piece(&mut self, value: PieceBits) { self.0 |= value << PROMOTION_PIECE_SHIFT }
+    pub fn set_promotion_piece(&mut self, value: PieceBits) { self.bits |= value << PROMOTION_PIECE_SHIFT }
 
     #[inline(always)]
     pub fn is_attack(&self) -> bool { self.get_piece_attacked() != 0 }
@@ -623,7 +626,10 @@ impl Bitboard {
             return;
         }
 
-        let mut mv = Move(0, 0);
+        let mut mv = Move {
+            bits: 0,
+            mvvlva: 0
+        };
 
         mv.set_en_passant_attack(is_en_passant_attack_mask);
 
@@ -655,7 +661,7 @@ impl Bitboard {
             mv.set_self_lost_king_side_castle();
         }
 
-        mv.1 = self.mvv_lva(piece_active, piece_attacked);
+        mv.mvvlva = self.mvv_lva(piece_active, piece_attacked);
         result.push(mv);
     }
 
