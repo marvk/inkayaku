@@ -1,9 +1,9 @@
 extern crate core;
 
+use marvk_chess_core::constants::piece::Piece;
 use marvk_chess_core::constants::square::Square;
 
-use crate::board::constants::{BISHOP, KING, KNIGHT, NO_PIECE, OccupancyBits, PAWN, PieceBits, QUEEN, ROOK, SquareMaskBits, SquareShiftBits};
-use crate::board::Move;
+use crate::board::constants::{OccupancyBits, PieceBits, SquareMaskBits, SquareShiftBits};
 
 pub mod board;
 
@@ -33,24 +33,11 @@ pub fn occupancy_to_string(occupancy: OccupancyBits) -> String {
 
 
 pub fn piece_to_string(piece_bits: PieceBits) -> String {
-    match piece_bits {
-        PAWN => "p",
-        KNIGHT => "n",
-        BISHOP => "b",
-        ROOK => "r",
-        QUEEN => "q",
-        KING => "k",
-        NO_PIECE => "",
-        _ => "",
-    }.to_string()
+    Piece::by_index(piece_bits as usize).map(|p| p.fen.to_string()).unwrap_or_else(|| "".to_string())
 }
 
 pub fn square_to_string(square_shift_bits: SquareShiftBits) -> String {
-    Square::SQUARES.get(square_shift_bits as usize).map(|s| s.fen()).unwrap_or_else(|| "-".to_string())
-}
-
-pub fn move_to_san(mv: &Move) -> String {
-    mv.san()
+    Square::by_index(square_shift_bits as usize).map(|s| s.fen().to_string()).unwrap_or_else(|| "-".to_string())
 }
 
 #[inline(always)]

@@ -254,7 +254,7 @@ impl<T: UciTx, H: Heuristic, M: MoveOrder> Search<T, H, M> {
                     }
                     UciPositionFrom(fen, moves) => {
                         self.state.bitboard = Bitboard::new(&fen);
-                        self.state.bitboard.make_all_san(moves.iter().map(|mv| mv.to_string()).collect::<Vec<_>>().as_slice());
+                        self.state.bitboard.make_all_uci(moves.iter().map(|mv| mv.to_string()).collect::<Vec<_>>().as_slice());
                     }
                     UciGo(go) => {
                         self.params.go = go;

@@ -19,8 +19,8 @@ impl Piece {
 
     pub fn as_color(&self, color: Color) -> ColoredPiece {
         match color {
+            Color::WHITE => self.as_white(),
             Color::BLACK => self.as_black(),
-            Color::WHITE => self.as_black(),
             _ => panic!(),
         }
     }

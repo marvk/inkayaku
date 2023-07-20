@@ -38,7 +38,7 @@ impl ColoredPiece {
     }
 
     pub fn by_index<'a>(color_index: usize, piece_index: usize) -> &'a ColoredPiece {
-        &Self::COLORED_PIECES[color_index + piece_index * 2]
+        &Self::COLORED_PIECES[color_index + piece_index * 2 - 2]
     }
 
     pub fn by<'a>(color: Color, piece: Piece) -> &'a ColoredPiece {

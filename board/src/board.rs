@@ -7,9 +7,9 @@ use marvk_chess_core::constants::piece::Piece;
 use marvk_chess_core::constants::square::Square;
 use marvk_chess_core::fen::{Fen, FEN_STARTPOS};
 
-use crate::{mask_and_shift_from_lowest_one_bit, move_to_san, piece_to_string, square_to_string};
+use crate::{mask_and_shift_from_lowest_one_bit, piece_to_string, square_to_string};
 use crate::board::constants::*;
-use crate::board::MoveFromSanError::{MoveDoesNotExist, MoveIsNotValid};
+use crate::board::MoveFromUciError::{MoveDoesNotExist, MoveIsNotValid};
 use crate::board::precalculated::magic::{BISHOP_MAGICS, Magics, ROOK_MAGICS};
 use crate::board::precalculated::nonmagic::{BLACK_PAWN_NONMAGICS, KING_NONMAGICS, KNIGHT_NONMAGICS, Nonmagics, WHITE_PAWN_NONMAGICS};
 use crate::board::zobrist::Zobrist;
@@ -89,8 +89,12 @@ impl Move {
     #[inline(always)]
     pub fn is_attack(&self) -> bool { self.get_piece_attacked() != 0 }
 
-    pub fn san(&self) -> String {
+    pub fn to_uci_string(&self) -> String {
         format!("{}{}{}", square_to_string(self.get_source_square()), square_to_string(self.get_target_square()), piece_to_string(self.get_promotion_piece()))
+    }
+
+    pub fn to_san_string(&self, board: &mut Bitboard) -> String {
+        board.uci_to_san(&self.to_uci_string()).unwrap()
     }
 
     pub fn structs(&self) -> (Square, Square, Option<Piece>) {
@@ -100,18 +104,38 @@ impl Move {
     }
 }
 
+pub struct MoveStructs {
+    pub from_square: Square,
+    pub to_square: Square,
+    pub from_piece: Piece,
+    pub to_piece: Option<Piece>,
+    pub promote_to: Option<Piece>,
+}
+
+impl From<Move> for MoveStructs {
+    fn from(mv: Move) -> Self {
+        MoveStructs {
+            from_square: Square::by_index(mv.get_source_square() as usize).unwrap(),
+            to_square: Square::by_index(mv.get_target_square() as usize).unwrap(),
+            from_piece: Piece::by_index(mv.get_piece_moved() as usize).unwrap(),
+            to_piece: Piece::by_index(mv.get_piece_attacked() as usize),
+            promote_to: Piece::by_index(mv.get_promotion_piece() as usize),
+        }
+    }
+}
+
 impl Debug for Move {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(
             f,
             "{}",
-            self.san(),
+            self.to_uci_string(),
         )
     }
 }
 
 #[derive(Eq, PartialEq, Debug)]
-pub enum MoveFromSanError {
+pub enum MoveFromUciError {
     MoveDoesNotExist(String),
     MoveIsNotValid(Move),
 }
@@ -266,6 +290,13 @@ impl Bitboard {
         let mut buffer = Vec::new();
         self.generate_pseudo_legal_moves_with_buffer(&mut buffer);
         buffer
+    }
+
+    fn generate_legal_moves(&mut self) -> Vec<Move> {
+        self.generate_pseudo_legal_moves()
+            .into_iter()
+            .filter(|&mv| self.is_move_legal(mv))
+            .collect()
     }
 
     pub fn generate_pseudo_legal_non_quiescent_moves(&self) -> Vec<Move> {
@@ -970,9 +1001,9 @@ impl Bitboard {
         1 - self.turn
     }
 
-    pub fn find_move(&mut self, san: &str) -> Result<Move, MoveFromSanError> {
-        let san = san.trim();
-        let result = self.generate_pseudo_legal_moves().into_iter().find(|mv| mv.san() == san).ok_or_else(|| MoveDoesNotExist(san.to_string()))?;
+    pub fn find_move(&mut self, uci: &str) -> Result<Move, MoveFromUciError> {
+        let uci = uci.trim();
+        let result = self.generate_pseudo_legal_moves().into_iter().find(|mv| mv.to_uci_string() == uci).ok_or_else(|| MoveDoesNotExist(uci.to_string()))?;
 
         self.make(result);
         if !self.is_valid() {
@@ -983,19 +1014,86 @@ impl Bitboard {
         Ok(result)
     }
 
-    pub fn make_uci(&mut self, uci: &str) -> Result<(), MoveFromSanError> {
+    pub fn make_uci(&mut self, uci: &str) -> Result<(), MoveFromUciError> {
         let mv = self.find_move(uci)?;
         self.make(mv);
 
         Ok(())
     }
 
-    pub fn make_all_san(&mut self, moves: &[String]) {
+    pub fn make_all_uci(&mut self, moves: &[String]) {
         for mv in moves {
             if let Err(error) = self.make_uci(mv) {
                 return;
             }
         }
+    }
+
+    pub fn uci_to_san(&mut self, uci: &str) -> Result<String, MoveFromUciError> {
+        let uci = uci.trim();
+        let moves = self.generate_pseudo_legal_moves();
+        let result = *moves.iter().find(|mv| mv.to_uci_string() == uci).ok_or_else(|| MoveDoesNotExist(uci.to_string()))?;
+
+        self.make(result);
+        if !self.is_valid() {
+            return Err(MoveIsNotValid(result));
+        }
+
+        let is_check = self.is_current_in_check();
+        let is_mate = !self.is_any_move_legal(&self.generate_pseudo_legal_moves());
+        self.unmake(result);
+
+        let MoveStructs { from_square, to_square, from_piece, to_piece, promote_to } = MoveStructs::from(result);
+
+        let legal_moves_with_same_to_square_and_same_piece: Vec<_> =
+            moves
+                .into_iter()
+                .filter(|&mv| self.is_move_legal(mv))
+                .filter(|mv| mv.get_target_square() == result.get_target_square())
+                .filter(|mv| mv.get_piece_moved() == result.get_piece_moved())
+                .collect();
+
+        let any_share_source_rank =
+            legal_moves_with_same_to_square_and_same_piece.iter()
+                .any(|mv| {
+                    let other_square = Square::by_index(mv.get_source_square() as usize).unwrap();
+                    other_square.rank == from_square.rank && other_square.file != from_square.file
+                });
+
+        let any_share_source_file =
+            legal_moves_with_same_to_square_and_same_piece.iter()
+                .any(|mv| {
+                    let other_square = Square::by_index(mv.get_source_square() as usize).unwrap();
+                    other_square.file == from_square.file && other_square.rank != from_square.rank
+                });
+
+
+        let piece = if !matches!(from_piece, Piece::PAWN) {
+            from_piece.as_white().fen.to_string()
+        } else if to_piece.is_some() {
+            from_square.file.fen.to_string()
+        } else {
+            "".to_string()
+        };
+        let is_pawn_move = from_piece == Piece::PAWN;
+
+        let disambiguation_symbol = match (any_share_source_file, any_share_source_rank, is_pawn_move) {
+            (true, _, true) => { from_square.file.fen.to_string() }
+            (true, true, false) => { format!("{}{}", from_square.file.fen, from_square.rank.fen) }
+            (true, false, false) => { from_square.rank.fen.to_string() }
+            (false, true, false) => { from_square.file.fen.to_string() }
+            (_, _, _) => { "".to_string() }
+        };
+        let capture = if to_piece.is_some() { "x" } else { "" };
+        let target_square = to_square.fen();
+        let promotion_piece = promote_to.map(|p| p.as_color(Color::WHITE));
+        let promotion_piece = promotion_piece.map(|p| p.fen.to_string()).unwrap_or_else(|| "".to_string());
+        let check_str = if is_mate { "#" } else if is_check { "+" } else { "" };
+
+        dbg!(&Color::by_index(self.turn as usize));
+        dbg!(&piece);
+
+        Ok(format!("{}{}{}{}{}{}", piece, disambiguation_symbol, capture, target_square, promotion_piece, check_str))
     }
 
     pub fn is_any_move_legal(&mut self, moves: &[Move]) -> bool {
@@ -1188,7 +1286,7 @@ impl Display for Move {
         write!(
             f,
             "Move({}) {{ piece_moved = {}, piece_attacked = {}, self_lost_king_side_castle = {}, self_lost_queen_side_castle = {}, opponent_lost_king_side_castle = {}, opponent_lost_queen_side_castle = {}, castle_move = {}, en_passant_attack = {}, source_square = {}, target_square = {}, halfmove_reset = {}, previous_halfmove = {}, previous_en_passant_square = {}, next_en_passant_square = {}, promotion_piece = {}}}",
-            move_to_san(&self),
+            self.to_uci_string(),
             piece_to_string(self.get_piece_moved()),
             piece_to_string(self.get_piece_attacked()),
             self.get_self_lost_king_side_castle() != 0,
@@ -1269,6 +1367,65 @@ mod tests {
     use marvk_chess_core::fen::Fen;
 
     use crate::board::Bitboard;
+
+    #[test]
+    #[ignore]
+    fn print_some_sans() {
+        let fen = Fen::new("r4rk1/ppqnpp1p/6pb/4p3/5P2/2N4Q/PPP2P1P/2KR3R b - - 1 16").unwrap();
+        let mut board = Bitboard::new(&fen);
+
+        for mv in board.generate_legal_moves() {
+            println!("{}", mv.to_san_string(&mut board));
+        }
+    }
+
+    #[test]
+    fn test_san1() {
+        let fen = Fen::new("3q4/2P5/8/8/4Q2Q/k7/8/K6Q w - - 0 1").unwrap();
+        let mut board = Bitboard::new(&fen);
+
+        assert_eq!(board.uci_to_san("e4e1"), Ok("Qee1".to_string()));
+        assert_eq!(board.uci_to_san("h4e1"), Ok("Qh4e1".to_string()));
+        assert_eq!(board.uci_to_san("h1e1"), Ok("Q1e1".to_string()));
+        assert_eq!(board.uci_to_san("c7c8q"), Ok("c8Q".to_string()));
+        assert_eq!(board.uci_to_san("c7d8n"), Ok("cxd8N".to_string()));
+    }
+
+    #[test]
+    fn test_san2() {
+        let fen = Fen::new("8/8/5q2/4P1P1/8/k7/8/K7 w - - 0 1").unwrap();
+        let mut board = Bitboard::new(&fen);
+
+        assert_eq!(board.uci_to_san("e5f6"), Ok("exf6".to_string()));
+        assert_eq!(board.uci_to_san("g5f6"), Ok("gxf6".to_string()));
+    }
+
+    #[test]
+    fn test_san3() {
+        let fen = Fen::new("8/8/8/1PpP4/8/k7/8/K7 w - c6 0 2").unwrap();
+        let mut board = Bitboard::new(&fen);
+
+        assert_eq!(board.uci_to_san("d5c6"), Ok("dxc6".to_string()));
+        assert_eq!(board.uci_to_san("b5c6"), Ok("bxc6".to_string()));
+    }
+
+    #[test]
+    fn test_san4() {
+        let fen = Fen::new("1Q6/8/8/8/8/k1K1B3/8/8 w - - 0 1").unwrap();
+        let mut board = Bitboard::new(&fen);
+
+        assert_eq!(board.uci_to_san("b8a8"), Ok("Qa8#".to_string()));
+        assert_eq!(board.uci_to_san("e3c5"), Ok("Bc5+".to_string()));
+    }
+
+    #[test]
+    fn test_san5() {
+        let fen = Fen::new("1q6/8/8/8/8/K1k1b3/8/8 b - - 0 1").unwrap();
+        let mut board = Bitboard::new(&fen);
+
+        assert_eq!(board.uci_to_san("b8a8"), Ok("Qa8#".to_string()));
+        assert_eq!(board.uci_to_san("e3c5"), Ok("Bc5+".to_string()));
+    }
 
     #[test]
     fn test_fen() {
