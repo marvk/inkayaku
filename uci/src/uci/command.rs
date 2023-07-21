@@ -1,23 +1,24 @@
-use std::env::var;
-use std::sync::{Arc, Mutex};
+use std::sync::{Mutex};
 use std::sync::mpsc::Sender;
 
 use crate::uci::{Info, ProtectionMessage, UciMove, UciTx, UciTxCommand};
 
-pub struct MessageUciTx {
+pub struct CommandUciTx {
     command_consumer: Mutex<Sender<UciTxCommand>>,
 }
 
-impl MessageUciTx {
+impl CommandUciTx {
     fn send(&self, command: UciTxCommand) {
         self.command_consumer.lock().unwrap().send(command).unwrap();
     }
-    pub fn new(command_consumer: Mutex<Sender<UciTxCommand>>) -> Self {
-        Self { command_consumer }
+    pub fn new(command_consumer: Sender<UciTxCommand>) -> Self {
+        // TODO Spawn channel inside (?)
+
+        Self { command_consumer: Mutex::new(command_consumer) }
     }
 }
 
-impl UciTx for MessageUciTx {
+impl UciTx for CommandUciTx {
     fn id_name(&self, name: &str) {
         self.send(UciTxCommand::IdName { name: name.to_string() });
     }

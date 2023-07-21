@@ -9,7 +9,7 @@ use crate::uci::ParseUciMoveError::InvalidFormat;
 
 pub mod console;
 pub mod parser;
-pub mod message;
+pub mod command;
 
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub enum ParseUciMoveError {

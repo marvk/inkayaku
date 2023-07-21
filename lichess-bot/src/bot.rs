@@ -18,13 +18,13 @@ use marvk_chess_lichess_api::api::BotApi;
 use marvk_chess_lichess_api::api::response::{GameStatusKey, SpeedKey, VariantFull, VariantKey};
 use marvk_chess_uci::uci::{Engine, Go, Info, ProtectionMessage, UciCommand, UciMove, UciTx, UciTxCommand};
 use marvk_chess_uci::uci::console::ConsoleUciTx;
-use marvk_chess_uci::uci::message::MessageUciTx;
+use marvk_chess_uci::uci::command::CommandUciTx;
 
 pub struct GameThread {
     bot_id: String,
     game_id: String,
     api: Arc<BotApi>,
-    engine: RefCell<Inkayaku<MessageUciTx>>,
+    engine: RefCell<Inkayaku<CommandUciTx>>,
     game_state: RefCell<GameState>,
 }
 
@@ -53,14 +53,11 @@ impl GameThread {
     }
 
     pub async fn start(self) {
-        println!("start");
+        println!("STARTIE GAME THREAD");
         let stream = self.api.stream_bot_game_state(&self.game_id).await.unwrap();
         pin_mut!(stream);
 
-        dbg!("we got a stream");
         while let Some(state) = stream.next().await {
-            dbg!(&state);
-
             match state {
                 BotGameState::GameFull { state, id, variant, speed, perf, rated, created_at, white, black, initial_fen, clock, days_per_turn, tournament_id } => {
                     let fen = Fen::new(&initial_fen).unwrap();
@@ -141,15 +138,15 @@ impl GameThread {
         self.game_state.borrow().self_color().index == bitboard.turn
     }
 
-    fn engine(&self) -> RefMut<Inkayaku<MessageUciTx>> {
+    fn engine(&self) -> RefMut<Inkayaku<CommandUciTx>> {
         self.engine.borrow_mut()
     }
 
-    fn spawn_engine(api: Arc<BotApi>, game_id: &str) -> Inkayaku<MessageUciTx> {
+    fn spawn_engine(api: Arc<BotApi>, game_id: &str) -> Inkayaku<CommandUciTx> {
         let (tx, rx): (Sender<UciTxCommand>, _) = channel();
         Self::spawn_engine_rx_thread(rx, api, game_id);
 
-        Inkayaku::new(Arc::new(MessageUciTx::new(Mutex::new(tx))))
+        Inkayaku::new(Arc::new(CommandUciTx::new(tx)))
     }
 
     fn spawn_engine_rx_thread(rx: Receiver<UciTxCommand>, api: Arc<BotApi>, game_id: &str) {

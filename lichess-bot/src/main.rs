@@ -1,3 +1,4 @@
+use std::any::Any;
 use std::fs;
 
 use futures::pin_mut;
@@ -25,6 +26,8 @@ async fn main() {
     pin_mut!(event_stream);
 
     while let Some(value) = event_stream.next().await {
+        println!("RECEIVED EVENT {:?}", value);
+
         match value {
             BotEvent::Challenge { challenge, compat: _compat } => {
                 let id = challenge.id;
@@ -33,10 +36,12 @@ async fn main() {
             BotEvent::GameStart { game } => {
                 let thread = GameThread::new("kingsgambot", &game.game_id, BotApi::new(SurfWebClient::new(&token, create_client())));
 
-                thread.start().await;
+                tokio::spawn(thread.start());
             }
             _ => {}
         }
+
+        println!("HANDLED EVENT");
     }
 
     // println!("{:?}", x);

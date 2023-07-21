@@ -974,6 +974,11 @@ impl Bitboard {
     }
 
     #[inline(always)]
+    pub fn ply_clock(&self) -> u32 {
+        (self.fullmove_clock - 1) * 2 + self.turn
+    }
+
+    #[inline(always)]
     fn get_active_and_passive(&self) -> (&PlayerState, &PlayerState) {
         if self.is_white_turn() {
             (&self.white, &self.black)
@@ -1400,6 +1405,22 @@ mod tests {
     use marvk_chess_core::fen::Fen;
 
     use crate::board::Bitboard;
+
+    #[test]
+    fn test_ply_clock() {
+        let mut board = Bitboard::default();
+
+        for expected in 0..100 {
+            let actual = board.ply_clock();
+            assert_eq!(actual, expected);
+
+            if let Some(mv) = board.generate_legal_moves().first() {
+                board.make(*mv);
+            } else {
+                break;
+            }
+        }
+    }
 
     #[test]
     #[ignore]

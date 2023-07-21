@@ -18,11 +18,13 @@ use crate::inkayaku::move_order::{MoveOrder, MvvLvaMoveOrder};
 use crate::inkayaku::SearchMessage::{UciDebug, UciPonderHit, UciQuit, UciStop};
 use crate::inkayaku::transposition_table::{NodeType, TranspositionTable, TtEntry};
 use crate::inkayaku::transposition_table::NodeType::{EXACT, LOWERBOUND, UPPERBOUND};
+use crate::inkayaku::zobrist_history::ZobristHistory;
 use crate::move_into_uci_move;
 
 mod heuristic;
 mod transposition_table;
 mod move_order;
+mod zobrist_history;
 
 pub enum SearchMessage {
     UciUciNewGame,
@@ -111,6 +113,7 @@ struct Metrics {
     quiescence_nodes: u64,
     duration: Duration,
     transposition_hits: u64,
+    quiescence_transposition_hits: u64,
     quiescence_termination_ply_sum: u64,
     quiescence_termination_count: u64,
     started_quiescence_search_count: u64,
@@ -127,6 +130,10 @@ impl Metrics {
 
     fn table_hit_rate(&self) -> f64 {
         self.transposition_hits as f64 / ((self.transposition_hits + self.negamax_nodes) as f64)
+    }
+
+    fn quiescence_table_hit_rate(&self) -> f64 {
+        self.quiescence_transposition_hits as f64 / ((self.quiescence_transposition_hits + self.quiescence_nodes) as f64)
     }
 
     fn average_quiescence_termination_ply(&self) -> f64 {
@@ -178,6 +185,11 @@ impl MetricsService {
         self.total.started_quiescence_search_count += 1;
     }
 
+    fn increment_quiescence_transposition_hits(&mut self) {
+        self.last.quiescence_transposition_hits += 1;
+        self.total.quiescence_transposition_hits += 1;
+    }
+
     fn register_quiescence_termination(&mut self, ply: usize) {
         self.last.quiescence_termination_ply_sum += ply as u64;
         self.last.quiescence_termination_count += 1;
@@ -189,6 +201,7 @@ impl MetricsService {
 struct SearchState {
     bitboard: Bitboard,
     transposition_table: TranspositionTable,
+    zobrist_history: ZobristHistory,
     started_at: SystemTime,
     is_running: bool,
     metrics: MetricsService,
@@ -199,6 +212,7 @@ impl Default for SearchState {
         Self {
             bitboard: Bitboard::default(),
             transposition_table: TranspositionTable::new(10_000_000),
+            zobrist_history: ZobristHistory::default(),
             started_at: SystemTime::UNIX_EPOCH,
             is_running: false,
             metrics: MetricsService::default(),
@@ -253,13 +267,7 @@ impl<T: UciTx, H: Heuristic, M: MoveOrder> Search<T, H, M> {
                         self.debug = debug;
                     }
                     UciPositionFrom(fen, moves) => {
-                        self.state.bitboard = Bitboard::new(&fen);
-                        let make_all_result =
-                            self.state.bitboard.make_all_uci(moves.iter().map(|mv| mv.to_string()).collect::<Vec<_>>().as_slice());
-
-                        if let Err(error) = make_all_result {
-                            self.uci_tx.debug(&format!("{:?}", error))
-                        }
+                        self.set_position_from(fen, moves);
                     }
                     UciGo(go) => {
                         self.params.go = go;
@@ -277,6 +285,28 @@ impl<T: UciTx, H: Heuristic, M: MoveOrder> Search<T, H, M> {
                 }
             }
         }
+    }
+
+    fn set_position_from(&mut self, fen: Fen, moves: Vec<UciMove>) {
+        let mut board = Bitboard::new(&fen);
+        let mut zobrist_history = ZobristHistory::default();
+        zobrist_history.set(board.ply_clock() as usize, board.zobrist_hash());
+
+        for uci in moves {
+            match board.find_move(&uci.to_string()) {
+                Ok(mv) => {
+                    board.make(mv);
+                    zobrist_history.set(board.ply_clock() as usize, board.zobrist_hash());
+                }
+                Err(error) => {
+                    self.uci_tx.debug(&format!("{:?}", error));
+                    return;
+                }
+            };
+        }
+
+        self.state.bitboard = board;
+        self.state.zobrist_history = zobrist_history;
     }
 
     fn check_messages(&mut self) {
@@ -387,12 +417,13 @@ impl<T: UciTx, H: Heuristic, M: MoveOrder> Search<T, H, M> {
     }
 
     fn generate_debug(&self) -> String {
-        format!("tphitrate {} nrate {} qrate {} avgqdepth {} qstartedrate {}",
+        format!("tphitrate {} nrate {} qrate {} avgqdepth {} qstartedrate {} qtphitrate {}",
                 self.state.metrics.last.table_hit_rate(),
                 self.state.metrics.last.negamax_node_rate(),
                 self.state.metrics.last.quiescence_node_rate(),
                 self.state.metrics.last.average_quiescence_termination_ply(),
                 self.state.metrics.last.quiescence_started_rate(),
+                self.state.metrics.last.quiescence_table_hit_rate(),
         )
     }
 
@@ -411,7 +442,6 @@ impl<T: UciTx, H: Heuristic, M: MoveOrder> Search<T, H, M> {
             });
         }
 
-        buffer.clear();
         self.state.metrics.increment_negamax_nodes();
 
         let zobrist = self.state.bitboard.zobrist_hash();
@@ -434,11 +464,11 @@ impl<T: UciTx, H: Heuristic, M: MoveOrder> Search<T, H, M> {
                 if alpha >= beta {
                     return tt_entry.mv.clone();
                 }
-            } else {}
+            }
         };
 
+        buffer.clear();
         self.board().generate_pseudo_legal_moves_with_buffer(buffer);
-
 
         if depth == 0 {
             let legal_moves_remaining = self.board().is_any_move_legal(buffer);
@@ -515,24 +545,45 @@ impl<T: UciTx, H: Heuristic, M: MoveOrder> Search<T, H, M> {
     }
 
 
-    fn quiescence_search(&mut self, depth: u32, buffer: &mut Vec<Move>, alpha_original: i32, beta_original: i32) -> ValuedMove {
+    fn quiescence_search(&mut self, depth: usize, buffer: &mut Vec<Move>, alpha_original: i32, beta_original: i32) -> ValuedMove {
         let color = self.board().turn;
-        buffer.clear();
+
+        let mut alpha = alpha_original;
+        let mut beta = beta_original;
+
+        // let zobrist = self.state.bitboard.zobrist_hash();
+        // if let Some(tt_entry) = self.state.transposition_table.get(zobrist) {
+        //     if tt_entry.depth >= depth {
+        //         self.state.metrics.increment_quiescence_transposition_hits();
+        //         match tt_entry.node_type {
+        //             NodeType::LOWERBOUND => alpha = max(alpha, tt_entry.value),
+        //             NodeType::UPPERBOUND => beta = min(beta, tt_entry.value),
+        //             NodeType::EXACT => {
+        //                 return tt_entry.mv.clone();
+        //             }
+        //         }
+        //         if alpha >= beta {
+        //             return tt_entry.mv.clone();
+        //         }
+        //     }
+        // }
 
         // TODO take attack moves from buffer on first call
+        buffer.clear();
         self.board().generate_pseudo_legal_non_quiescent_moves_with_buffer(buffer);
 
         let standing_pat = self.evaluate(color, true);
 
+        self.state.metrics.increment_quiescence_nodes();
 
-        if standing_pat >= beta_original {
+        if standing_pat >= beta {
             self.state.metrics.register_quiescence_termination(depth as usize);
-            return ValuedMove::leaf(beta_original);
+            return ValuedMove::leaf(beta);
         }
 
         self.move_order.sort(buffer);
 
-        let mut alpha = max(alpha_original, standing_pat);
+        let mut alpha = max(alpha, standing_pat);
 
         let mut best_move = None;
         let mut best_child = None;
@@ -548,14 +599,12 @@ impl<T: UciTx, H: Heuristic, M: MoveOrder> Search<T, H, M> {
             }
 
 
-            self.state.metrics.increment_quiescence_nodes();
-
-            let child = self.quiescence_search(depth + 1, &mut next_buffer, -beta_original, -alpha);
+            let child = self.quiescence_search(depth + 1, &mut next_buffer, -beta, -alpha);
             let value = -child.value;
 
             self.board().unmake(*mv);
 
-            if value >= beta_original {
+            if value >= beta {
                 self.state.metrics.register_quiescence_termination(depth as usize);
                 return ValuedMove::parent(beta_original, *mv, child);
             }
@@ -620,9 +669,23 @@ impl ValuedMove {
 
 #[cfg(test)]
 mod test {
+    use std::sync::mpsc::channel;
+    use std::sync::Mutex;
     use marvk_chess_board::board::constants::{BLACK, WHITE};
+    use marvk_chess_uci::uci::command::CommandUciTx;
 
-    use crate::inkayaku::heuristic_factor;
+    use crate::inkayaku::{heuristic_factor, Inkayaku};
+
+    #[test]
+    fn test() {
+        // let (tx, rx) = channel();
+        //
+        // let tx = MessageUciTx::new(Mutex::new(tx));
+        //
+        // Inkayaku::new()
+    }
+
+
 
     #[test]
     fn test_heuristic_factor() {
