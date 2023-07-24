@@ -91,14 +91,17 @@ impl Move {
     pub fn set_promotion_piece(&mut self, value: PieceBits) { self.bits |= value << PROMOTION_PIECE_SHIFT }
 
     #[inline(always)]
-    pub fn is_attack(&self) -> bool { self.get_piece_attacked() != 0 }
+    pub fn is_attack(&self) -> bool { self.get_piece_attacked() != NO_PIECE }
+
+    #[inline(always)]
+    pub fn is_promotion(&self) -> bool { self.get_promotion_piece() != NO_PIECE }
 
     pub fn to_uci_string(&self) -> String {
         format!("{}{}{}", square_to_string(self.get_source_square()), square_to_string(self.get_target_square()), piece_to_string(self.get_promotion_piece()))
     }
 
-    pub fn to_pgn_string(&self, board: &mut Bitboard) -> String {
-        board.uci_to_pgn(&self.to_uci_string()).unwrap()
+    pub fn to_pgn_string(&self, board: &mut Bitboard) -> Result<String, MoveFromUciError> {
+        board.uci_to_pgn(&self.to_uci_string())
     }
 
     pub fn structs(&self) -> (Square, Square, Option<Piece>) {
@@ -1148,8 +1151,8 @@ impl Bitboard {
     }
 
     #[allow(clippy::wrong_self_convention)]
-    pub fn is_any_move_non_quiescent(&mut self, moves: &[Move]) -> bool {
-        moves.iter().any(|mv| mv.is_attack() || mv.get_promotion_piece() != NO_PIECE)
+    pub fn is_any_move_non_quiescent(moves: &[Move]) -> bool {
+        moves.iter().any(|mv| mv.is_attack() || mv.is_promotion())
     }
 
     pub fn fen(&self) -> Fen {
@@ -1408,7 +1411,7 @@ mod tests {
         let mut board = Bitboard::new(&fen);
 
         for mv in board.generate_legal_moves() {
-            println!("{}", mv.to_pgn_string(&mut board));
+            println!("{}", mv.to_pgn_string(&mut board).unwrap());
         }
     }
 

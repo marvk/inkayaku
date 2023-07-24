@@ -88,7 +88,21 @@ pub struct Go {
 impl Go {
     pub const EMPTY: Go = Go::new(Vec::new(), false, None, None, None, None, None, None, None, None, None, false);
 
-    pub const fn new(search_moves: Vec<UciMove>, ponder: bool, white_time: Option<Duration>, black_time: Option<Duration>, white_increment: Option<Duration>, black_increment: Option<Duration>, moves_to_go: Option<u64>, depth: Option<u64>, nodes: Option<u64>, mate: Option<u64>, move_time: Option<Duration>, infinite: bool) -> Self {
+    #[allow(clippy::too_many_arguments)]
+    pub const fn new(
+        search_moves: Vec<UciMove>,
+        ponder: bool,
+        white_time: Option<Duration>,
+        black_time: Option<Duration>,
+        white_increment: Option<Duration>,
+        black_increment: Option<Duration>,
+        moves_to_go: Option<u64>,
+        depth: Option<u64>,
+        nodes: Option<u64>,
+        mate: Option<u64>,
+        move_time: Option<Duration>,
+        infinite: bool
+    ) -> Self {
         Self { search_moves, ponder, white_time, black_time, white_increment, black_increment, moves_to_go, depth, nodes, mate, move_time, infinite }
     }
 }
@@ -146,6 +160,7 @@ impl CurrentLine {
 }
 
 impl Info {
+    #[allow(clippy::too_many_arguments)]
     pub fn new(depth: u32, selective_depth: u32, time: Duration, nodes: u64, principal_variation: Vec<UciMove>, multi_pv: u32, score: Score, current_move: UciMove, current_move_number: u32, hash_full: u32, nps: u64, table_hits: u32, shredder_table_hits: u32, cpu_load: u32, string: String, refutation: Vec<UciMove>, current_line_cpu_number: u32, current_line: Vec<UciMove>) -> Self {
         Self {
             depth: Some(depth),

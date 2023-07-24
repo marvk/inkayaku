@@ -1,6 +1,6 @@
 use serde::{Deserialize, Deserializer, Serialize};
 
-use crate::api::response::{Color, GameStatusKey, PerfKey, SpeedKey, VariantFull, VariantKey};
+use crate::api::response::{Color, GameStatusKey, SpeedKey, VariantFull};
 
 #[derive(Serialize, Deserialize, Debug)]
 #[serde(rename_all = "camelCase")]

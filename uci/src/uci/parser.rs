@@ -243,8 +243,6 @@ impl<'a> CommandParser<'a> {
 
 #[cfg(test)]
 mod tests {
-    use std::num::IntErrorKind::NegOverflow;
-    use std::num::ParseIntError;
     use std::time::Duration;
 
     use marvk_chess_core::constants::piece::Piece;

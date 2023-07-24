@@ -203,7 +203,7 @@ impl Square {
         }
     }
 
-    pub fn by<'a>(file: File, rank: Rank) -> Square {
+    pub fn by(file: File, rank: Rank) -> Square {
         Self::by_indices(file.index as usize, rank.index as usize).unwrap()
     }
 

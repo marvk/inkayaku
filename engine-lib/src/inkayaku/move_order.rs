@@ -3,9 +3,10 @@ use std::cmp::Reverse;
 use marvk_chess_board::board::Move;
 
 pub trait MoveOrder {
-    fn sort(&self, moves: &mut Vec<Move>);
+    fn sort(&self, moves: &mut Vec<Move>, pv_move: Option<Move>);
 }
 
+#[derive(Default)]
 pub struct MvvLvaMoveOrder;
 
 impl MvvLvaMoveOrder {
@@ -13,12 +14,17 @@ impl MvvLvaMoveOrder {
     fn eval(mv: &Move) -> i32 {
         mv.mvvlva
     }
+
+    #[inline(always)]
+    fn pv_move_bonus(pv_move: Option<Move>, mv: &Move) -> i32 {
+        pv_move.filter(|pv_move| pv_move.bits == mv.bits).map(|_| 100000).unwrap_or(0)
+    }
 }
 
 impl MoveOrder for MvvLvaMoveOrder {
-    fn sort(&self, moves: &mut Vec<Move>) {
-        moves.shuffle(&mut thread_rng());
-        moves.sort_by_key(|mv| Reverse(Self::eval(mv)));
+    fn sort(&self, moves: &mut Vec<Move>, pv_move: Option<Move>) {
+        // moves.shuffle(&mut thread_rng());
+        moves.sort_by_key(|mv| Reverse(Self::eval(mv) + Self::pv_move_bonus(pv_move, mv)));
     }
 }
 
@@ -37,10 +43,10 @@ mod tests {
 
         let order = MvvLvaMoveOrder {};
 
-        order.sort(&mut moves);
+        order.sort(&mut moves, None);
 
         for mv in moves {
-            println!("{}", mv.to_pgn_string(&mut bitboard));
+            println!("{}", mv.to_pgn_string(&mut bitboard).unwrap());
         }
     }
 }

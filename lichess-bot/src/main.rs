@@ -1,4 +1,3 @@
-use std::any::Any;
 use std::fs;
 
 use futures::pin_mut;

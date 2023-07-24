@@ -37,6 +37,7 @@ pub trait Heuristic {
     fn evaluate_ongoing(&self, bitboard: &Bitboard) -> i32;
 }
 
+#[derive(Default)]
 pub struct SimpleHeuristic;
 
 impl SimpleHeuristic {
@@ -143,7 +144,7 @@ impl SimpleHeuristic {
             while rank < 8 {
                 let mut file = 0;
                 while file < 8 {
-                    result[8 * (8 - rank - 1) + file] = table[8 * rank + file] * -1;
+                    result[8 * (8 - rank - 1) + file] = -table[8 * rank + file];
                     file += 1;
                 }
                 rank += 1;

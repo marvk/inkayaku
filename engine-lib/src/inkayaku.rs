@@ -6,7 +6,7 @@ use std::thread::JoinHandle;
 use std::time::{Duration, SystemTime};
 
 use marvk_chess_board::board::{Bitboard, Move};
-use marvk_chess_board::board::constants::{BLACK, ColorBits, WHITE};
+use marvk_chess_board::board::constants::{ColorBits, WHITE};
 use marvk_chess_core::fen::Fen;
 use marvk_chess_uci::uci::{Engine, Go, Info, ProtectionMessage, Score, UciCommand, UciMove, UciTx};
 use SearchMessage::{UciGo, UciPositionFrom, UciUciNewGame};
@@ -16,8 +16,8 @@ use UciCommand::Go as GoCommand;
 use crate::inkayaku::heuristic::{Heuristic, SimpleHeuristic};
 use crate::inkayaku::move_order::{MoveOrder, MvvLvaMoveOrder};
 use crate::inkayaku::SearchMessage::{UciDebug, UciPonderHit, UciQuit, UciStop};
-use crate::inkayaku::transposition_table::{NodeType, TranspositionTable, TtEntry};
-use crate::inkayaku::transposition_table::NodeType::{EXACT, LOWERBOUND, UPPERBOUND};
+use crate::inkayaku::transposition_table::{TranspositionTable, TtEntry};
+use crate::inkayaku::transposition_table::NodeType::{Exact, Lowerbound, Upperbound};
 use crate::inkayaku::zobrist_history::ZobristHistory;
 use crate::move_into_uci_move;
 
@@ -34,6 +34,22 @@ pub enum SearchMessage {
     UciStop,
     UciPonderHit,
     UciQuit,
+}
+
+struct EngineOptions {
+    iterative_deepening: bool,
+    ply_bonus: bool,
+    default_ply: usize,
+}
+
+impl Default for EngineOptions {
+    fn default() -> Self {
+        Self {
+            iterative_deepening: true,
+            ply_bonus: true,
+            default_ply: 7,
+        }
+    }
 }
 
 pub struct Inkayaku<T: UciTx + Send + Sync + 'static> {
@@ -53,12 +69,13 @@ impl<T: UciTx + Send + Sync + 'static> Inkayaku<T> {
 
     fn start_search_thread(search_rx: Receiver<SearchMessage>, uci_tx: Arc<T>) -> JoinHandle<()> {
         thread::spawn(move || {
-            Search::new(uci_tx, search_rx, SimpleHeuristic {}, MvvLvaMoveOrder {}).idle();
+            Search::new(uci_tx, search_rx, SimpleHeuristic::default(), MvvLvaMoveOrder::default(), EngineOptions::default()).idle();
         })
     }
 }
 
 impl<T: UciTx + Send + Sync + 'static> Engine for Inkayaku<T> {
+    #[allow(unused_variables)]
     fn accept(&mut self, command: UciCommand) {
         match command {
             Uci => {
@@ -201,6 +218,7 @@ impl MetricsService {
 struct SearchState {
     bitboard: Bitboard,
     transposition_table: TranspositionTable,
+    principal_variation: Option<Vec<Move>>,
     zobrist_history: ZobristHistory,
     started_at: SystemTime,
     is_running: bool,
@@ -212,6 +230,7 @@ impl Default for SearchState {
         Self {
             bitboard: Bitboard::default(),
             transposition_table: TranspositionTable::new(10_000_000),
+            principal_variation: None,
             zobrist_history: ZobristHistory::default(),
             started_at: SystemTime::UNIX_EPOCH,
             is_running: false,
@@ -247,13 +266,14 @@ struct Search<T: UciTx, H: Heuristic, M: MoveOrder> {
     heuristic: H,
     move_order: M,
     state: SearchState,
+    options: EngineOptions,
     flags: SearchFlags,
     params: SearchParams,
 }
 
 impl<T: UciTx, H: Heuristic, M: MoveOrder> Search<T, H, M> {
-    pub fn new(uci_tx: Arc<T>, rx: Receiver<SearchMessage>, heuristic: H, move_order: M) -> Self {
-        Self { uci_tx, search_rx: rx, debug: false, state: SearchState::default(), flags: SearchFlags::default(), params: SearchParams::default(), heuristic, move_order }
+    pub fn new(uci_tx: Arc<T>, rx: Receiver<SearchMessage>, heuristic: H, move_order: M, options: EngineOptions) -> Self {
+        Self { uci_tx, search_rx: rx, debug: false, state: SearchState::default(), options, flags: SearchFlags::default(), params: SearchParams::default(), heuristic, move_order }
     }
 
     fn idle(&mut self) {
@@ -385,7 +405,10 @@ impl<T: UciTx, H: Heuristic, M: MoveOrder> Search<T, H, M> {
         }
     }
 
-    fn calculate_ply(&self, default_ply: u64, bonus: bool) -> u64 {
+    fn calculate_ply(&self) -> u64 {
+        let bonus = self.options.ply_bonus;
+        let default_ply = self.options.default_ply;
+
         if let Some(depth) = self.params.go.depth {
             return depth;
         } else if !bonus {
@@ -429,25 +452,45 @@ impl<T: UciTx, H: Heuristic, M: MoveOrder> Search<T, H, M> {
     fn best_move(&mut self) -> Option<UciMove> {
         self.state.started_at = SystemTime::now();
 
-        let ply = self.calculate_ply(7, false) as usize;
+        let ply = self.calculate_ply() as usize;
 
-        let best_move = self.negamax(&mut self.create_buffer(), ply, ply, self.heuristic.loss_score(), self.heuristic.win_score());
+        let mut best_move = None;
+
+        let start_ply = if self.options.iterative_deepening { 1 } else { self.options.default_ply };
+
+        for depth in start_ply..=ply {
+            best_move = Some(self.negamax(&mut self.create_buffer(), depth, depth, self.heuristic.loss_score(), self.heuristic.win_score(), self.state.principal_variation.is_some()));
+
+            let uci_pv;
+            let score;
+
+            if let Some(best_move) = &best_move {
+                let bb_pv = principal_variation(best_move);
+                self.state.principal_variation = Some(bb_pv.iter().map(|&&mv| mv).collect());
+                uci_pv = Some(bb_pv.into_iter().map(|&mv| move_into_uci_move(mv)).collect::<Vec<_>>());
+                score = Some(
+                    self.heuristic
+                        .find_mate_at_fullmove_clock(best_move.value, &self.state.bitboard)
+                        .unwrap_or(Score::Centipawn { score: best_move.value })
+                );
+            } else {
+                uci_pv = None;
+                score = None;
+            };
+
+            self.uci_tx.info(&Info {
+                principal_variation: uci_pv,
+                time: Some(self.state.started_at.elapsed().unwrap()),
+                score,
+                depth: Some(depth as u32),
+                string: self.debug_string(),
+                ..self.generate_info()
+            });
+        }
+
+        let best_move = best_move.unwrap();
+
         self.state.metrics.increment_duration(&self.state.started_at.elapsed().unwrap());
-
-        let vec = principal_variation(&best_move).into_iter().map(|&mv| move_into_uci_move(mv)).collect::<Vec<_>>();
-
-        let score =
-            self.heuristic
-                .find_mate_at_fullmove_clock(best_move.value, &self.state.bitboard)
-                .unwrap_or(Score::Centipawn { score: best_move.value });
-
-        self.uci_tx.info(&Info {
-            principal_variation: Some(vec),
-            score: Some(score),
-            depth: Some(ply as u32),
-            string: self.debug_string(),
-            ..self.generate_info()
-        });
 
         best_move.mv.map(move_into_uci_move)
     }
@@ -480,10 +523,10 @@ impl<T: UciTx, H: Heuristic, M: MoveOrder> Search<T, H, M> {
         self::heuristic_factor(color) * self.heuristic.evaluate(&self.state.bitboard, legal_moves_remaining)
     }
 
-    fn negamax(&mut self, buffer: &mut Vec<Move>, depth: usize, ply: usize, alpha_original: i32, beta_original: i32) -> ValuedMove {
+    fn negamax(&mut self, buffer: &mut Vec<Move>, depth: usize, ply: usize, alpha_original: i32, beta_original: i32, pv: bool) -> ValuedMove {
         let color = self.board().turn;
 
-        if self.state.metrics.last.negamax_nodes % 1000000 == 0 {
+        if self.state.metrics.last.negamax_nodes % 100000 == 0 {
             self.check_messages();
             self.uci_tx.info(&Info {
                 time: Some(self.state.started_at.elapsed().unwrap()),
@@ -509,9 +552,9 @@ impl<T: UciTx, H: Heuristic, M: MoveOrder> Search<T, H, M> {
             if tt_entry.depth >= depth {
                 self.state.metrics.increment_transposition_hits();
                 match tt_entry.node_type {
-                    NodeType::LOWERBOUND => alpha = max(alpha, tt_entry.value),
-                    NodeType::UPPERBOUND => beta = min(beta, tt_entry.value),
-                    NodeType::EXACT => {
+                    Lowerbound => alpha = max(alpha, tt_entry.value),
+                    Upperbound => beta = min(beta, tt_entry.value),
+                    Exact => {
                         return tt_entry.mv.clone();
                     }
                 }
@@ -531,7 +574,7 @@ impl<T: UciTx, H: Heuristic, M: MoveOrder> Search<T, H, M> {
         if depth == 0 {
             let legal_moves_remaining = self.board().is_any_move_legal(buffer);
 
-            if legal_moves_remaining && self.board().is_any_move_non_quiescent(buffer) {
+            if legal_moves_remaining && Bitboard::is_any_move_non_quiescent(buffer) {
                 self.state.metrics.increment_started_quiescence_search();
                 return self.quiescence_search(0, buffer, alpha, beta);
             }
@@ -540,7 +583,8 @@ impl<T: UciTx, H: Heuristic, M: MoveOrder> Search<T, H, M> {
             return ValuedMove::leaf(value);
         }
 
-        self.move_order.sort(buffer);
+        let pv_move = if pv { self.state.principal_variation.as_ref().unwrap().get(ply - depth).copied() } else { None };
+        self.move_order.sort(buffer, pv_move);
 
         let mut best_value = self.heuristic.loss_score();
         let mut best_child: Option<ValuedMove> = None;
@@ -558,7 +602,7 @@ impl<T: UciTx, H: Heuristic, M: MoveOrder> Search<T, H, M> {
 
             legal_moves_encountered = true;
 
-            let child = self.negamax(&mut next_buffer, depth - 1, ply, -beta, -alpha);
+            let child = self.negamax(&mut next_buffer, depth - 1, ply, -beta, -alpha, pv_move.map(|pv_mv| pv_mv.bits == mv.bits).unwrap_or(false));
 
             let child_value = -child.value;
 
@@ -587,11 +631,11 @@ impl<T: UciTx, H: Heuristic, M: MoveOrder> Search<T, H, M> {
 
         if !self.heuristic.is_checkmate(best_value) {
             let node_type = if best_value <= alpha_original {
-                UPPERBOUND
+                Upperbound
             } else if best_value >= beta {
-                LOWERBOUND
+                Lowerbound
             } else {
-                EXACT
+                Exact
             };
 
             self.state.transposition_table.put(zobrist, TtEntry::new(result.clone(), depth, best_value, node_type));
@@ -614,10 +658,8 @@ impl<T: UciTx, H: Heuristic, M: MoveOrder> Search<T, H, M> {
 
     fn quiescence_search(&mut self, depth: u32, buffer: &mut Vec<Move>, alpha_original: i32, beta_original: i32) -> ValuedMove {
         let color = self.board().turn;
-        buffer.clear();
 
         // TODO take attack moves from buffer on first call
-        self.board().generate_pseudo_legal_non_quiescent_moves_with_buffer(buffer);
 
         let standing_pat = self.evaluate(color, true);
 
@@ -626,14 +668,16 @@ impl<T: UciTx, H: Heuristic, M: MoveOrder> Search<T, H, M> {
             return ValuedMove::leaf(beta_original);
         }
 
-        self.move_order.sort(buffer);
-
         let mut alpha = max(alpha_original, standing_pat);
 
         let mut best_move = None;
         let mut best_child = None;
 
         let mut next_buffer = Vec::new();
+
+        buffer.clear();
+        self.board().generate_pseudo_legal_non_quiescent_moves_with_buffer(buffer);
+        self.move_order.sort(buffer, None);
 
         for mv in buffer {
             self.board().make(*mv);
@@ -715,29 +759,43 @@ impl ValuedMove {
 
 #[cfg(test)]
 mod test {
-    use std::sync::{Arc, Mutex};
+    use std::sync::{Arc};
     use std::sync::mpsc::channel;
 
     use marvk_chess_board::board::constants::{BLACK, WHITE};
     use marvk_chess_core::fen::{Fen, FEN_STARTPOS};
-    use marvk_chess_uci::uci::{Engine, Go, Score, UciCommand, UciMove, UciTx, UciTxCommand};
+    use marvk_chess_uci::uci::{Engine, Go, Score, UciCommand, UciMove, UciTxCommand};
     use marvk_chess_uci::uci::command::CommandUciTx;
 
     use crate::inkayaku::{heuristic_factor, Inkayaku};
 
     #[test]
-    fn test() {
-        let (tx, rx) = channel();
-        let mut engine = Inkayaku::new(Arc::new(CommandUciTx::new(tx)));
-
-        engine.accept(UciCommand::UciNewGame);
+    fn test_threefold_1() {
         let fen = Fen::new("5rk1/5r2/p7/2pNp1q1/2P1P2p/1P3P1P/P4RP1/5RK1 w - - 0 28").unwrap();
         let moves = vec![
             "d5b6", "g5e3", "b6d5", "e3g5",
             "d5b6", "g5e3", "b6d5",
-        ].into_iter().map(|s| UciMove::parse(s).unwrap()).collect();
-        engine.accept(UciCommand::PositionFrom { fen, moves });
-        engine.accept(UciCommand::Go { go: Go { search_moves: vec![UciMove::parse("e3g5").unwrap()], ..Go::default() } });
+        ];
+        let move_to_draw = "e3g5";
+        _test_threefold(moves, fen, move_to_draw);
+    }
+
+    #[test]
+    fn test_threefold_2() {
+        let fen = FEN_STARTPOS.clone();
+        let moves = vec!["e2e4", "b8c6", "g1f3", "g8f6", "e4e5", "f6d5", "d2d4", "d7d6", "c2c4", "d5b6", "b1c3", "c8g4", "c1f4", "e7e6", "d1d3", "g4f3", "g2f3", "d6e5", "d4e5", "d8d4", "d3d4", "c6d4", "e1c1", "c7c5", "f4g3", "e8e7", "f3f4", "d4f5", "f1d3", "f5g3", "h2g3", "f7f6", "c1d2", "f6e5", "f4e5", "b6d7", "f2f4", "d7b6", "d2e3", "e7f7", "g3g4", "f8e7", "a2a4", "a7a5", "d1e1", "a8d8", "g4g5", "d8a8", "h1h3", "h7h6", "h3f3", "h6g5", "f4g5", "f7e8", "f3g3", "h8h2", "e1e2", "h2e2", "d3e2", "e8d7", "g3g4", "a8h8", "e2f3", "h8h3", "b2b3", "d7c7", "c3b5", "c7d7", "g4g2", "d7c8", "e3f4", "h3h4", "g2g4", "h4h3", "g4g2", "h3h4", "g2g4", "h4h3"];
+        let move_to_draw = "g4g2";
+        _test_threefold(moves, fen, move_to_draw);
+    }
+
+    fn _test_threefold(moves: Vec<&str>, fen: Fen, move_to_draw: &str) {
+        let (tx, rx) = channel();
+        let mut engine = Inkayaku::new(Arc::new(CommandUciTx::new(tx)));
+
+        engine.accept(UciCommand::UciNewGame);
+        let uci_moves = moves.into_iter().map(|s| UciMove::parse(s).unwrap()).collect();
+        engine.accept(UciCommand::PositionFrom { fen, moves: uci_moves });
+        engine.accept(UciCommand::Go { go: Go { search_moves: vec![UciMove::parse(move_to_draw).unwrap()], ..Go::default() } });
 
         let mut commands = Vec::new();
 

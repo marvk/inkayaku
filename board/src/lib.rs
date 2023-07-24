@@ -37,7 +37,7 @@ pub fn piece_to_string(piece_bits: PieceBits) -> String {
 }
 
 pub fn square_to_string(square_shift_bits: SquareShiftBits) -> String {
-    Square::by_index(square_shift_bits as usize).map(|s| s.fen().to_string()).unwrap_or_else(|| "-".to_string())
+    Square::by_index(square_shift_bits as usize).map(|s| s.fen()).unwrap_or_else(|| "-".to_string())
 }
 
 #[inline(always)]

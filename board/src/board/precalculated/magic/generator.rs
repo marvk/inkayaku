@@ -128,8 +128,8 @@ impl ConfigurationGenerator {
                 current = current.unwrap().translate(direction);
             }
 
-            if current.is_some() {
-                result |= current.unwrap().mask;
+            if let Some(square) = current {
+                result |= square.mask;
             }
         }
 
@@ -175,7 +175,7 @@ impl ConfigurationGenerator {
             }
         }
 
-        return true;
+        true
     }
 
     fn hash(&self, magic: u64, occupancy: u64) -> usize {

@@ -3,9 +3,9 @@ use std::collections::{HashMap, LinkedList};
 use crate::inkayaku::ValuedMove;
 
 pub enum NodeType {
-    EXACT,
-    LOWERBOUND,
-    UPPERBOUND,
+    Exact,
+    Lowerbound,
+    Upperbound,
 }
 
 pub struct TtEntry {
@@ -67,7 +67,7 @@ mod test {
     use crate::inkayaku::ValuedMove;
 
     fn gen_value() -> TtEntry {
-        TtEntry::new(ValuedMove::leaf(0), 0, 0, NodeType::EXACT)
+        TtEntry::new(ValuedMove::leaf(0), 0, 0, NodeType::Exact)
     }
 
     #[test]

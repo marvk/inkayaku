@@ -103,7 +103,7 @@ impl Fen {
 
     fn validate_ranks(ranks: &str) -> Result<(), ParseFenError> {
         ranks
-            .split("/")
+            .split('/')
             .map(Self::validate_rank)
             .find(Result::is_err)
             .unwrap_or(Ok(()))

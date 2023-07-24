@@ -150,7 +150,7 @@ mod perft_debug {
         let mut bitboard = Bitboard::new(fen);
 
         let moves = bitboard.perft(depth);
-        let actual: HashSet<(String, u64)> = HashSet::from_iter(moves.iter().map(|t| (move_to_uci_string(&t.0), t.1)));
+        let actual: HashSet<(String, u64)> = HashSet::from_iter(moves.iter().map(|t| (t.0.to_uci_string(), t.1)));
         let expected: HashSet<(String, u64)> = HashSet::from_iter(REFERENCE_ENGINE.perft(fen, depth));
 
         let actual_moves = actual.iter().map(|t| t.0.clone()).collect::<HashSet<_>>();
