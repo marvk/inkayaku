@@ -8,7 +8,7 @@ use std::time::{Duration, SystemTime};
 use marvk_chess_board::board::{Bitboard, Move};
 use marvk_chess_board::board::constants::{BLACK, ColorBits, WHITE};
 use marvk_chess_core::fen::Fen;
-use marvk_chess_uci::uci::{CurrentLine, Engine, Go, Info, ProtectionMessage, Score, UciCommand, UciMove, UciTx};
+use marvk_chess_uci::uci::{Engine, Go, Info, ProtectionMessage, Score, UciCommand, UciMove, UciTx};
 use SearchMessage::{UciGo, UciPositionFrom, UciUciNewGame};
 use UciCommand::*;
 use UciCommand::Go as GoCommand;
@@ -290,16 +290,16 @@ impl<T: UciTx, H: Heuristic, M: MoveOrder> Search<T, H, M> {
     fn set_position_from(&mut self, fen: Fen, moves: Vec<UciMove>) {
         let mut board = Bitboard::new(&fen);
         let mut zobrist_history = ZobristHistory::default();
-        zobrist_history.set(board.ply_clock() as usize, board.zobrist_hash());
+        zobrist_history.set(board.halfmove_clock as usize, board.zobrist_hash());
 
         for uci in moves {
             match board.find_move(&uci.to_string()) {
                 Ok(mv) => {
                     board.make(mv);
-                    zobrist_history.set(board.ply_clock() as usize, board.zobrist_hash());
+                    zobrist_history.set(board.halfmove_clock as usize, board.zobrist_hash());
                 }
                 Err(error) => {
-                    self.uci_tx.debug(&format!("{:?}", error));
+                    eprintln!("{:?}", error);
                     return;
                 }
             };
@@ -377,10 +377,59 @@ impl<T: UciTx, H: Heuristic, M: MoveOrder> Search<T, H, M> {
         self.state.is_running = false;
     }
 
+    fn self_time_remaining(&self) -> Option<Duration> {
+        if self.state.bitboard.turn == WHITE {
+            self.params.go.white_time
+        } else {
+            self.params.go.black_time
+        }
+    }
+
+    fn calculate_ply(&self, default_ply: u64, bonus: bool) -> u64 {
+        if let Some(depth) = self.params.go.depth {
+            return depth;
+        } else if !bonus {
+            return default_ply as u64;
+        }
+
+        let time_remaining = self.self_time_remaining();
+        if time_remaining.is_none() {
+            return default_ply as u64;
+        }
+        let millis_remaining = time_remaining.unwrap().as_millis();
+
+
+        let time_malus: i64 = match millis_remaining {
+            60_000.. => 0,
+            20_000.. => -1,
+            7_500.. => -2,
+            1_000.. => -3,
+            _ => -4
+        };
+
+        let fast_play_bonus: i64 = if self.state.bitboard.fullmove_clock > 1 && self.state.metrics.last.table_hit_rate() < 0.75 {
+            match millis_remaining {
+                3_000..=30_000 => {
+                    let last_millis = self.state.metrics.last.duration.as_millis();
+                    match last_millis {
+                        100.. => 0,
+                        10.. => 1,
+                        _ => 2,
+                    }
+                }
+                _ => 0,
+            }
+        } else {
+            0
+        };
+
+        (default_ply as i64 + time_malus + fast_play_bonus) as u64
+    }
+
     fn best_move(&mut self) -> Option<UciMove> {
         self.state.started_at = SystemTime::now();
 
-        let ply = self.params.go.depth.unwrap_or(6) as usize;
+        let ply = self.calculate_ply(7, false) as usize;
 
         let best_move = self.negamax(&mut self.create_buffer(), ply, ply, self.heuristic.loss_score(), self.heuristic.win_score());
         self.state.metrics.increment_duration(&self.state.started_at.elapsed().unwrap());
@@ -445,6 +494,11 @@ impl<T: UciTx, H: Heuristic, M: MoveOrder> Search<T, H, M> {
         self.state.metrics.increment_negamax_nodes();
 
         let zobrist = self.state.bitboard.zobrist_hash();
+        let halfmove_clock = self.board().halfmove_clock as usize;
+        self.state.zobrist_history.set(halfmove_clock, zobrist);
+        if self.state.zobrist_history.is_threefold_repetition(halfmove_clock) {
+            return ValuedMove::leaf(self.heuristic.draw_score());
+        }
 
         let maybe_tt_entry = self.state.transposition_table.get(zobrist);
 
@@ -469,6 +523,10 @@ impl<T: UciTx, H: Heuristic, M: MoveOrder> Search<T, H, M> {
 
         buffer.clear();
         self.board().generate_pseudo_legal_moves_with_buffer(buffer);
+
+        if ply == depth {
+            self.filter_search_moves(buffer);
+        }
 
         if depth == 0 {
             let legal_moves_remaining = self.board().is_any_move_legal(buffer);
@@ -544,46 +602,33 @@ impl<T: UciTx, H: Heuristic, M: MoveOrder> Search<T, H, M> {
         result
     }
 
+    fn filter_search_moves(&mut self, buffer: &mut Vec<Move>) {
+        let search_moves = &self.params.go.search_moves;
 
-    fn quiescence_search(&mut self, depth: usize, buffer: &mut Vec<Move>, alpha_original: i32, beta_original: i32) -> ValuedMove {
+        if !search_moves.is_empty() {
+            buffer.retain(|&mv| {
+                search_moves.contains(&move_into_uci_move(mv))
+            });
+        }
+    }
+
+    fn quiescence_search(&mut self, depth: u32, buffer: &mut Vec<Move>, alpha_original: i32, beta_original: i32) -> ValuedMove {
         let color = self.board().turn;
-
-        let mut alpha = alpha_original;
-        let mut beta = beta_original;
-
-        // let zobrist = self.state.bitboard.zobrist_hash();
-        // if let Some(tt_entry) = self.state.transposition_table.get(zobrist) {
-        //     if tt_entry.depth >= depth {
-        //         self.state.metrics.increment_quiescence_transposition_hits();
-        //         match tt_entry.node_type {
-        //             NodeType::LOWERBOUND => alpha = max(alpha, tt_entry.value),
-        //             NodeType::UPPERBOUND => beta = min(beta, tt_entry.value),
-        //             NodeType::EXACT => {
-        //                 return tt_entry.mv.clone();
-        //             }
-        //         }
-        //         if alpha >= beta {
-        //             return tt_entry.mv.clone();
-        //         }
-        //     }
-        // }
+        buffer.clear();
 
         // TODO take attack moves from buffer on first call
-        buffer.clear();
         self.board().generate_pseudo_legal_non_quiescent_moves_with_buffer(buffer);
 
         let standing_pat = self.evaluate(color, true);
 
-        self.state.metrics.increment_quiescence_nodes();
-
-        if standing_pat >= beta {
+        if standing_pat >= beta_original {
             self.state.metrics.register_quiescence_termination(depth as usize);
-            return ValuedMove::leaf(beta);
+            return ValuedMove::leaf(beta_original);
         }
 
         self.move_order.sort(buffer);
 
-        let mut alpha = max(alpha, standing_pat);
+        let mut alpha = max(alpha_original, standing_pat);
 
         let mut best_move = None;
         let mut best_child = None;
@@ -598,13 +643,14 @@ impl<T: UciTx, H: Heuristic, M: MoveOrder> Search<T, H, M> {
                 continue;
             }
 
+            self.state.metrics.increment_quiescence_nodes();
 
-            let child = self.quiescence_search(depth + 1, &mut next_buffer, -beta, -alpha);
+            let child = self.quiescence_search(depth + 1, &mut next_buffer, -beta_original, -alpha);
             let value = -child.value;
 
             self.board().unmake(*mv);
 
-            if value >= beta {
+            if value >= beta_original {
                 self.state.metrics.register_quiescence_termination(depth as usize);
                 return ValuedMove::parent(beta_original, *mv, child);
             }
@@ -669,22 +715,45 @@ impl ValuedMove {
 
 #[cfg(test)]
 mod test {
+    use std::sync::{Arc, Mutex};
     use std::sync::mpsc::channel;
-    use std::sync::Mutex;
+
     use marvk_chess_board::board::constants::{BLACK, WHITE};
+    use marvk_chess_core::fen::{Fen, FEN_STARTPOS};
+    use marvk_chess_uci::uci::{Engine, Go, Score, UciCommand, UciMove, UciTx, UciTxCommand};
     use marvk_chess_uci::uci::command::CommandUciTx;
 
     use crate::inkayaku::{heuristic_factor, Inkayaku};
 
     #[test]
     fn test() {
-        // let (tx, rx) = channel();
-        //
-        // let tx = MessageUciTx::new(Mutex::new(tx));
-        //
-        // Inkayaku::new()
-    }
+        let (tx, rx) = channel();
+        let mut engine = Inkayaku::new(Arc::new(CommandUciTx::new(tx)));
 
+        engine.accept(UciCommand::UciNewGame);
+        let fen = Fen::new("5rk1/5r2/p7/2pNp1q1/2P1P2p/1P3P1P/P4RP1/5RK1 w - - 0 28").unwrap();
+        let moves = vec![
+            "d5b6", "g5e3", "b6d5", "e3g5",
+            "d5b6", "g5e3", "b6d5",
+        ].into_iter().map(|s| UciMove::parse(s).unwrap()).collect();
+        engine.accept(UciCommand::PositionFrom { fen, moves });
+        engine.accept(UciCommand::Go { go: Go { search_moves: vec![UciMove::parse("e3g5").unwrap()], ..Go::default() } });
+
+        let mut commands = Vec::new();
+
+        while let Ok(command) = rx.recv() {
+            commands.push(command);
+            if let UciTxCommand::BestMove { .. } = commands.last().unwrap() {
+                break;
+            }
+        }
+
+        if let Some(UciTxCommand::Info { info }) = commands.into_iter().filter(|c| matches!(c, UciTxCommand::Info {..})).last() {
+            assert_eq!(info.score, Some(Score::Centipawn { score: 0 }));
+        } else {
+            assert_eq!(true, false, "No score was send");
+        }
+    }
 
 
     #[test]
