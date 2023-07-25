@@ -26,31 +26,9 @@ mod transposition_table;
 mod move_order;
 mod zobrist_history;
 
-pub enum SearchMessage {
-    UciUciNewGame,
-    UciDebug(bool),
-    UciPositionFrom(Fen, Vec<UciMove>),
-    UciGo(Go),
-    UciStop,
-    UciPonderHit,
-    UciQuit,
-}
-
-struct EngineOptions {
-    iterative_deepening: bool,
-    ply_bonus: bool,
-    default_ply: usize,
-}
-
-impl Default for EngineOptions {
-    fn default() -> Self {
-        Self {
-            iterative_deepening: true,
-            ply_bonus: true,
-            default_ply: 7,
-        }
-    }
-}
+const OPTION_ITERATIVE_DEEPENING: &str = "iterative-deepening";
+const OPTION_PLY_BONUS: &str = "ply-bonus";
+const OPTION_DEFAULT_PLY: &str = "default-ply";
 
 pub struct Inkayaku<T: UciTx + Send + Sync + 'static> {
     uci_tx: Arc<T>,
@@ -124,147 +102,13 @@ impl<T: UciTx + Send + Sync + 'static> Engine for Inkayaku<T> {
     }
 }
 
-#[derive(Default)]
-struct Metrics {
-    negamax_nodes: u64,
-    quiescence_nodes: u64,
-    duration: Duration,
-    transposition_hits: u64,
-    quiescence_transposition_hits: u64,
-    quiescence_termination_ply_sum: u64,
-    quiescence_termination_count: u64,
-    started_quiescence_search_count: u64,
-}
-
-impl Metrics {
-    fn total_nodes(&self) -> u64 {
-        self.negamax_nodes + self.quiescence_nodes
-    }
-
-    fn nps(&self) -> u64 {
-        ((self.negamax_nodes as f64 / self.duration.as_nanos() as f64) * 1_000_000_000.0) as u64
-    }
-
-    fn table_hit_rate(&self) -> f64 {
-        self.transposition_hits as f64 / ((self.transposition_hits + self.negamax_nodes) as f64)
-    }
-
-    fn quiescence_table_hit_rate(&self) -> f64 {
-        self.quiescence_transposition_hits as f64 / ((self.quiescence_transposition_hits + self.quiescence_nodes) as f64)
-    }
-
-    fn average_quiescence_termination_ply(&self) -> f64 {
-        self.quiescence_termination_ply_sum as f64 / self.quiescence_termination_count as f64
-    }
-
-    fn negamax_node_rate(&self) -> f64 {
-        self.negamax_nodes as f64 / self.total_nodes() as f64
-    }
-
-    fn quiescence_node_rate(&self) -> f64 {
-        self.quiescence_nodes as f64 / self.total_nodes() as f64
-    }
-
-    fn quiescence_started_rate(&self) -> f64 {
-        self.started_quiescence_search_count as f64 / self.negamax_nodes as f64
-    }
-}
-
-#[derive(Default)]
-struct MetricsService {
-    last: Metrics,
-    total: Metrics,
-}
-
-impl MetricsService {
-    fn increment_negamax_nodes(&mut self) {
-        self.last.negamax_nodes += 1;
-        self.total.negamax_nodes += 1;
-    }
-
-    fn increment_quiescence_nodes(&mut self) {
-        self.last.quiescence_nodes += 1;
-        self.total.quiescence_nodes += 1;
-    }
-
-    fn increment_duration(&mut self, duration: &Duration) {
-        self.last.duration = Duration::from_nanos((self.last.duration.as_nanos() + duration.as_nanos()) as u64);
-        self.total.duration = Duration::from_nanos((self.total.duration.as_nanos() + duration.as_nanos()) as u64);
-    }
-
-    fn increment_transposition_hits(&mut self) {
-        self.last.transposition_hits += 1;
-        self.total.transposition_hits += 1;
-    }
-
-    fn increment_started_quiescence_search(&mut self) {
-        self.last.started_quiescence_search_count += 1;
-        self.total.started_quiescence_search_count += 1;
-    }
-
-    fn increment_quiescence_transposition_hits(&mut self) {
-        self.last.quiescence_transposition_hits += 1;
-        self.total.quiescence_transposition_hits += 1;
-    }
-
-    fn register_quiescence_termination(&mut self, ply: usize) {
-        self.last.quiescence_termination_ply_sum += ply as u64;
-        self.last.quiescence_termination_count += 1;
-        self.total.quiescence_termination_ply_sum += ply as u64;
-        self.total.quiescence_termination_count += 1;
-    }
-}
-
-struct SearchState {
-    bitboard: Bitboard,
-    transposition_table: TranspositionTable,
-    principal_variation: Option<Vec<Move>>,
-    zobrist_history: ZobristHistory,
-    started_at: SystemTime,
-    is_running: bool,
-    metrics: MetricsService,
-}
-
-impl Default for SearchState {
-    fn default() -> Self {
-        Self {
-            bitboard: Bitboard::default(),
-            transposition_table: TranspositionTable::new(10_000_000),
-            principal_variation: None,
-            zobrist_history: ZobristHistory::default(),
-            started_at: SystemTime::UNIX_EPOCH,
-            is_running: false,
-            metrics: MetricsService::default(),
-        }
-    }
-}
-
-#[derive(Default)]
-struct SearchFlags {
-    reset_for_next_search: bool,
-    stop_as_soon_as_possible: bool,
-    quit_as_soon_as_possible: bool,
-    ponder_hit: bool,
-}
-
-struct SearchParams {
-    go: Go,
-}
-
-impl Default for SearchParams {
-    fn default() -> Self {
-        Self {
-            go: Go::EMPTY,
-        }
-    }
-}
-
 struct Search<T: UciTx, H: Heuristic, M: MoveOrder> {
     uci_tx: Arc<T>,
     search_rx: Receiver<SearchMessage>,
     debug: bool,
     heuristic: H,
     move_order: M,
+
     state: SearchState,
     options: EngineOptions,
     flags: SearchFlags,
@@ -339,10 +183,10 @@ impl<T: UciTx, H: Heuristic, M: MoveOrder> Search<T, H, M> {
                     UciDebug(debug) => {
                         self.debug = debug;
                     }
-                    UciPositionFrom(_, _) => {
+                    UciPositionFrom(..) => {
                         // Ignore positions send during go
                     }
-                    UciGo(_) => {
+                    UciGo(..) => {
                         // Ignore go send during go
                     }
                     UciStop => {
@@ -499,7 +343,7 @@ impl<T: UciTx, H: Heuristic, M: MoveOrder> Search<T, H, M> {
         Info {
             nodes: Some(self.state.metrics.last.total_nodes()),
             hash_full: Some((self.state.transposition_table.load_factor() * 1000.0) as u32),
-            nps: Some(((self.state.metrics.last.total_nodes() as f64 / self.state.started_at.elapsed().unwrap().as_nanos() as f64) * 1_000_000_000.0) as u64),
+            nps: Some(self.state.metrics.last.nps()),
             ..Info::EMPTY
         }
     }
@@ -756,10 +600,175 @@ impl ValuedMove {
     }
 }
 
+pub enum SearchMessage {
+    UciUciNewGame,
+    UciDebug(bool),
+    UciPositionFrom(Fen, Vec<UciMove>),
+    UciGo(Go),
+    UciStop,
+    UciPonderHit,
+    UciQuit,
+}
+
+/// UCI options
+struct EngineOptions {
+    iterative_deepening: bool,
+    ply_bonus: bool,
+    default_ply: usize,
+}
+
+impl Default for EngineOptions {
+    fn default() -> Self {
+        Self {
+            iterative_deepening: true,
+            ply_bonus: true,
+            default_ply: 7,
+        }
+    }
+}
+
+/// State during search
+struct SearchState {
+    bitboard: Bitboard,
+    transposition_table: TranspositionTable,
+    principal_variation: Option<Vec<Move>>,
+    zobrist_history: ZobristHistory,
+    started_at: SystemTime,
+    is_running: bool,
+    metrics: MetricsService,
+}
+
+impl Default for SearchState {
+    fn default() -> Self {
+        Self {
+            bitboard: Bitboard::default(),
+            transposition_table: TranspositionTable::new(10_000_000),
+            principal_variation: None,
+            zobrist_history: ZobristHistory::default(),
+            started_at: SystemTime::UNIX_EPOCH,
+            is_running: false,
+            metrics: MetricsService::default(),
+        }
+    }
+}
+
+/// Control the search "from the outside"
+#[derive(Default)]
+struct SearchFlags {
+    reset_for_next_search: bool,
+    stop_as_soon_as_possible: bool,
+    quit_as_soon_as_possible: bool,
+    ponder_hit: bool,
+}
+
+/// Input for the search
+#[derive(Default)]
+struct SearchParams {
+    go: Go,
+}
+
+impl Default for SearchParams {
+    fn default() -> Self {
+        Self {
+            go: Go::EMPTY,
+        }
+    }
+}
+
+#[derive(Default)]
+struct Metrics {
+    negamax_nodes: u64,
+    quiescence_nodes: u64,
+    duration: Duration,
+    transposition_hits: u64,
+    quiescence_transposition_hits: u64,
+    quiescence_termination_ply_sum: u64,
+    quiescence_termination_count: u64,
+    started_quiescence_search_count: u64,
+}
+
+impl Metrics {
+    fn total_nodes(&self) -> u64 {
+        self.negamax_nodes + self.quiescence_nodes
+    }
+
+    fn nps(&self) -> u64 {
+        ((self.total_nodes() as f64 / self.duration.as_nanos() as f64) * 1_000_000_000.0) as u64
+    }
+
+    fn table_hit_rate(&self) -> f64 {
+        self.transposition_hits as f64 / ((self.transposition_hits + self.negamax_nodes) as f64)
+    }
+
+    fn quiescence_table_hit_rate(&self) -> f64 {
+        self.quiescence_transposition_hits as f64 / ((self.quiescence_transposition_hits + self.quiescence_nodes) as f64)
+    }
+
+    fn average_quiescence_termination_ply(&self) -> f64 {
+        self.quiescence_termination_ply_sum as f64 / self.quiescence_termination_count as f64
+    }
+
+    fn negamax_node_rate(&self) -> f64 {
+        self.negamax_nodes as f64 / self.total_nodes() as f64
+    }
+
+    fn quiescence_node_rate(&self) -> f64 {
+        self.quiescence_nodes as f64 / self.total_nodes() as f64
+    }
+
+    fn quiescence_started_rate(&self) -> f64 {
+        self.started_quiescence_search_count as f64 / self.negamax_nodes as f64
+    }
+}
+
+#[derive(Default)]
+struct MetricsService {
+    last: Metrics,
+    total: Metrics,
+}
+
+impl MetricsService {
+    fn increment_negamax_nodes(&mut self) {
+        self.last.negamax_nodes += 1;
+        self.total.negamax_nodes += 1;
+    }
+
+    fn increment_quiescence_nodes(&mut self) {
+        self.last.quiescence_nodes += 1;
+        self.total.quiescence_nodes += 1;
+    }
+
+    fn increment_duration(&mut self, duration: &Duration) {
+        self.last.duration = Duration::from_nanos((self.last.duration.as_nanos() + duration.as_nanos()) as u64);
+        self.total.duration = Duration::from_nanos((self.total.duration.as_nanos() + duration.as_nanos()) as u64);
+    }
+
+    fn increment_transposition_hits(&mut self) {
+        self.last.transposition_hits += 1;
+        self.total.transposition_hits += 1;
+    }
+
+    fn increment_started_quiescence_search(&mut self) {
+        self.last.started_quiescence_search_count += 1;
+        self.total.started_quiescence_search_count += 1;
+    }
+
+    fn increment_quiescence_transposition_hits(&mut self) {
+        self.last.quiescence_transposition_hits += 1;
+        self.total.quiescence_transposition_hits += 1;
+    }
+
+    fn register_quiescence_termination(&mut self, ply: usize) {
+        self.last.quiescence_termination_ply_sum += ply as u64;
+        self.last.quiescence_termination_count += 1;
+        self.total.quiescence_termination_ply_sum += ply as u64;
+        self.total.quiescence_termination_count += 1;
+    }
+}
 
 #[cfg(test)]
 mod test {
-    use std::sync::{Arc};
+    use std::sync::Arc;
     use std::sync::mpsc::channel;
 
     use marvk_chess_board::board::constants::{BLACK, WHITE};
