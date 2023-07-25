@@ -1,7 +1,8 @@
+use std::{thread, usize};
 use std::cmp::{max, min};
+use std::ops::{Div, Mul};
 use std::sync::Arc;
 use std::sync::mpsc::{channel, Receiver, Sender};
-use std::thread;
 use std::thread::JoinHandle;
 use std::time::{Duration, SystemTime};
 
@@ -26,10 +27,6 @@ mod transposition_table;
 mod move_order;
 mod zobrist_history;
 
-const OPTION_ITERATIVE_DEEPENING: &str = "iterative-deepening";
-const OPTION_PLY_BONUS: &str = "ply-bonus";
-const OPTION_DEFAULT_PLY: &str = "default-ply";
-
 pub struct Inkayaku<T: UciTx + Send + Sync + 'static> {
     uci_tx: Arc<T>,
     debug: bool,
@@ -38,16 +35,16 @@ pub struct Inkayaku<T: UciTx + Send + Sync + 'static> {
 }
 
 impl<T: UciTx + Send + Sync + 'static> Inkayaku<T> {
-    pub fn new(uci_tx: Arc<T>) -> Self {
+    pub fn new(uci_tx: Arc<T>, debug: bool) -> Self {
         let (search_tx, search_rx) = channel();
-        let search_handle = Self::start_search_thread(search_rx, uci_tx.clone());
+        let search_handle = Self::start_search_thread(search_rx, uci_tx.clone(), debug);
 
-        Self { uci_tx, debug: false, search_tx, search_handle: Some(search_handle) }
+        Self { uci_tx, debug, search_tx, search_handle: Some(search_handle) }
     }
 
-    fn start_search_thread(search_rx: Receiver<SearchMessage>, uci_tx: Arc<T>) -> JoinHandle<()> {
+    fn start_search_thread(search_rx: Receiver<SearchMessage>, uci_tx: Arc<T>, debug: bool) -> JoinHandle<()> {
         thread::spawn(move || {
-            Search::new(uci_tx, search_rx, SimpleHeuristic::default(), MvvLvaMoveOrder::default(), EngineOptions::default()).idle();
+            Search::new(uci_tx, search_rx, SimpleHeuristic::default(), MvvLvaMoveOrder::default(), EngineOptions { debug, ..EngineOptions::default() }).idle();
         })
     }
 }
@@ -105,7 +102,6 @@ impl<T: UciTx + Send + Sync + 'static> Engine for Inkayaku<T> {
 struct Search<T: UciTx, H: Heuristic, M: MoveOrder> {
     uci_tx: Arc<T>,
     search_rx: Receiver<SearchMessage>,
-    debug: bool,
     heuristic: H,
     move_order: M,
 
@@ -117,7 +113,7 @@ struct Search<T: UciTx, H: Heuristic, M: MoveOrder> {
 
 impl<T: UciTx, H: Heuristic, M: MoveOrder> Search<T, H, M> {
     pub fn new(uci_tx: Arc<T>, rx: Receiver<SearchMessage>, heuristic: H, move_order: M, options: EngineOptions) -> Self {
-        Self { uci_tx, search_rx: rx, debug: false, state: SearchState::default(), options, flags: SearchFlags::default(), params: SearchParams::default(), heuristic, move_order }
+        Self { uci_tx, search_rx: rx, state: SearchState::default(), options, flags: SearchFlags::default(), params: SearchParams::default(), heuristic, move_order }
     }
 
     fn idle(&mut self) {
@@ -128,7 +124,7 @@ impl<T: UciTx, H: Heuristic, M: MoveOrder> Search<T, H, M> {
                         self.flags.reset_for_next_search = true;
                     }
                     UciDebug(debug) => {
-                        self.debug = debug;
+                        self.options.debug = debug;
                     }
                     UciPositionFrom(fen, moves) => {
                         self.set_position_from(fen, moves);
@@ -156,11 +152,14 @@ impl<T: UciTx, H: Heuristic, M: MoveOrder> Search<T, H, M> {
         let mut zobrist_history = ZobristHistory::default();
         zobrist_history.set(board.halfmove_clock as usize, board.zobrist_hash());
 
+        let mut bb_moves = Vec::new();
+
         for uci in moves {
             match board.find_move(&uci.to_string()) {
                 Ok(mv) => {
                     board.make(mv);
                     zobrist_history.set(board.halfmove_clock as usize, board.zobrist_hash());
+                    bb_moves.push(mv);
                 }
                 Err(error) => {
                     eprintln!("{:?}", error);
@@ -171,6 +170,8 @@ impl<T: UciTx, H: Heuristic, M: MoveOrder> Search<T, H, M> {
 
         self.state.bitboard = board;
         self.state.zobrist_history = zobrist_history;
+        self.params.fen = fen;
+        self.params.moves = bb_moves;
     }
 
     fn check_messages(&mut self) {
@@ -181,7 +182,7 @@ impl<T: UciTx, H: Heuristic, M: MoveOrder> Search<T, H, M> {
                         self.flags.reset_for_next_search = true;
                     }
                     UciDebug(debug) => {
-                        self.debug = debug;
+                        self.options.debug = debug;
                     }
                     UciPositionFrom(..) => {
                         // Ignore positions send during go
@@ -235,8 +236,8 @@ impl<T: UciTx, H: Heuristic, M: MoveOrder> Search<T, H, M> {
         self.state.is_running = true;
         self.state.started_at = SystemTime::now();
 
-        let best_move = self.best_move();
-        self.uci_tx.best_move(best_move);
+        let (best_move, ponder_move) = self.best_move();
+        self.uci_tx.best_move(best_move, ponder_move);
 
         self.state.is_running = false;
     }
@@ -246,6 +247,14 @@ impl<T: UciTx, H: Heuristic, M: MoveOrder> Search<T, H, M> {
             self.params.go.white_time
         } else {
             self.params.go.black_time
+        }
+    }
+
+    fn self_increment(&self) -> Option<Duration> {
+        if self.state.bitboard.turn == WHITE {
+            self.params.go.white_increment
+        } else {
+            self.params.go.black_increment
         }
     }
 
@@ -293,63 +302,122 @@ impl<T: UciTx, H: Heuristic, M: MoveOrder> Search<T, H, M> {
         (default_ply as i64 + time_malus + fast_play_bonus) as u64
     }
 
-    fn best_move(&mut self) -> Option<UciMove> {
-        self.state.started_at = SystemTime::now();
+    /// Check if the last played move was the ponder move. If it was, calculate the current pv.
+    fn try_set_pv_from_continuation(&mut self) {
+        let last_ponder_move = self.state.ponder_move();
+        let last_move_played = self.params.moves.last();
 
-        let ply = self.calculate_ply() as usize;
+        let message = match (last_ponder_move, last_move_played) {
+            (Some(last_ponder_move), Some(last_move_played)) => {
+                if last_ponder_move.bits == last_move_played.bits {
+                    let new_pv = self.state.principal_variation.take().unwrap().drain(0..2).collect();
+                    let result = format!("successful ponder continuation with {}: {:?}", last_ponder_move, new_pv);
+                    self.state.principal_variation = Some(new_pv);
+                    result
+                } else {
+                    format!("failed ponder continuation from ponder {}, {} was played", last_ponder_move, last_move_played)
+                }
+            }
+            (Some(last_ponder_move), None) => format!("failed ponder continuation from ponder {}, couldn't find last played move", last_ponder_move),
+            _ => "failed ponder continuation, no ponder move".to_string(),
+        };
+
+        self.uci_tx.debug(&message);
+    }
+
+
+    fn calculate_max_thinking_time(&self) -> Option<Duration> {
+        let increment = self.self_increment();
+        let time_remaining = self.self_time_remaining();
+
+
+        if let Some(time_remaining) = time_remaining {
+            if let Some(increment) = increment {
+                let increment_factor = match time_remaining.as_secs() {
+                    20.. => 1.0,
+                    10.. => 0.75,
+                    2.. => 0.5,
+                    _ => 0.25,
+                };
+
+                Some(increment.mul_f64(increment_factor))
+            } else {
+                Some(time_remaining.div(60))
+            }
+        } else {
+            None
+        }
+    }
+
+    fn best_move(&mut self) -> (Option<UciMove>, Option<UciMove>) {
+        self.state.started_at = SystemTime::now();
 
         let mut best_move = None;
 
-        let start_ply = if self.options.iterative_deepening { 1 } else { self.options.default_ply };
+        if self.options.try_previous_pv {
+            self.try_set_pv_from_continuation();
+        }
 
-        for depth in start_ply..=ply {
-            best_move = Some(self.negamax(&mut self.create_buffer(), depth, depth, self.heuristic.loss_score(), self.heuristic.win_score(), self.state.principal_variation.is_some()));
+        let max_depth = self.params.go.depth.map(|d| d as usize).unwrap_or(999999);
 
-            let uci_pv;
-            let score;
+        if self.params.go.move_time.is_none() {
+            self.params.go.move_time = self.calculate_max_thinking_time().map(|d| d.mul(2));
+        }
 
-            if let Some(best_move) = &best_move {
-                let bb_pv = principal_variation(best_move);
+        dbg!(self.calculate_max_thinking_time());
+
+        let mut uci_pv = None;
+        let mut score = None;
+
+        for depth in 1..=max_depth {
+            let current_best_move = self.negamax(&mut self.create_buffer(), depth, depth, self.heuristic.loss_score(), self.heuristic.win_score(), self.state.principal_variation.is_some());
+
+            let elapsed = self.state.elapsed();
+            let max_thinking_time = self.params.go.move_time.unwrap_or(Duration::MAX);
+            let stop = self.flags.stop_as_soon_as_possible || elapsed > max_thinking_time.div(3) || current_best_move.mv.is_none();
+            if !stop {
+                let bb_pv = principal_variation(&current_best_move);
                 self.state.principal_variation = Some(bb_pv.iter().map(|&&mv| mv).collect());
                 uci_pv = Some(bb_pv.into_iter().map(|&mv| move_into_uci_move(mv)).collect::<Vec<_>>());
                 score = Some(
                     self.heuristic
-                        .find_mate_at_fullmove_clock(best_move.value, &self.state.bitboard)
-                        .unwrap_or(Score::Centipawn { score: best_move.value })
+                        .find_mate_at_fullmove_clock(current_best_move.value, &self.state.bitboard)
+                        .unwrap_or(Score::Centipawn { score: current_best_move.value })
                 );
-            } else {
-                uci_pv = None;
-                score = None;
-            };
+
+                best_move = Some(current_best_move);
+            }
 
             self.uci_tx.info(&Info {
-                principal_variation: uci_pv,
-                time: Some(self.state.started_at.elapsed().unwrap()),
+                principal_variation: uci_pv.clone(),
+                time: Some(elapsed),
                 score,
-                depth: Some(depth as u32),
+                depth: Some((if stop { depth - 1 } else { depth }) as u32),
                 string: self.debug_string(),
                 ..self.generate_info()
             });
+
+            if stop {
+                break;
+            }
         }
 
-        let best_move = best_move.unwrap();
+        self.state.metrics.increment_duration(&self.state.elapsed());
 
-        self.state.metrics.increment_duration(&self.state.started_at.elapsed().unwrap());
-
-        best_move.mv.map(move_into_uci_move)
+        (best_move.and_then(|vm| vm.mv).map(move_into_uci_move), self.state.ponder_move().map(move_into_uci_move))
     }
 
     fn generate_info(&self) -> Info {
         Info {
             nodes: Some(self.state.metrics.last.total_nodes()),
             hash_full: Some((self.state.transposition_table.load_factor() * 1000.0) as u32),
-            nps: Some(self.state.metrics.last.nps()),
+            nps: Some(self.state.metrics.last.nps_with_duration(&self.state.elapsed())),
             ..Info::EMPTY
         }
     }
 
     fn debug_string(&self) -> Option<String> {
-        if self.debug { Some(self.generate_debug()) } else { None }
+        if self.options.debug { Some(self.generate_debug()) } else { None }
     }
 
     fn generate_debug(&self) -> String {
@@ -370,12 +438,20 @@ impl<T: UciTx, H: Heuristic, M: MoveOrder> Search<T, H, M> {
     fn negamax(&mut self, buffer: &mut Vec<Move>, depth: usize, ply: usize, alpha_original: i32, beta_original: i32, pv: bool) -> ValuedMove {
         let color = self.board().turn;
 
-        if self.state.metrics.last.negamax_nodes % 100000 == 0 {
+        let check_flags = self.should_check_flags();
+        if check_flags {
             self.check_messages();
             self.uci_tx.info(&Info {
-                time: Some(self.state.started_at.elapsed().unwrap()),
+                time: Some(self.state.elapsed()),
                 ..self.generate_info()
             });
+
+            if let Some(move_time) = self.params.go.move_time {
+                if self.state.elapsed() > move_time {
+                    self.flags.stop_as_soon_as_possible = true;
+                    return ValuedMove::leaf(0);
+                }
+            }
         }
 
         self.state.metrics.increment_negamax_nodes();
@@ -413,6 +489,11 @@ impl<T: UciTx, H: Heuristic, M: MoveOrder> Search<T, H, M> {
 
         if ply == depth {
             self.filter_search_moves(buffer);
+
+            if buffer.is_empty() {
+                dbg!("empty");
+                return ValuedMove::leaf(0);
+            }
         }
 
         if depth == 0 {
@@ -447,6 +528,10 @@ impl<T: UciTx, H: Heuristic, M: MoveOrder> Search<T, H, M> {
             legal_moves_encountered = true;
 
             let child = self.negamax(&mut next_buffer, depth - 1, ply, -beta, -alpha, pv_move.map(|pv_mv| pv_mv.bits == mv.bits).unwrap_or(false));
+
+            if self.flags.stop_as_soon_as_possible {
+                return ValuedMove::new(0, None, None);
+            }
 
             let child_value = -child.value;
 
@@ -488,6 +573,11 @@ impl<T: UciTx, H: Heuristic, M: MoveOrder> Search<T, H, M> {
         // TODO transposition table
 
         result
+    }
+
+    #[inline(always)]
+    fn should_check_flags(&mut self) -> bool {
+        self.state.metrics.last.negamax_nodes % 100000 == 0 && self.state.metrics.last.negamax_nodes > 0
     }
 
     fn filter_search_moves(&mut self, buffer: &mut Vec<Move>) {
@@ -612,7 +702,8 @@ pub enum SearchMessage {
 
 /// UCI options
 struct EngineOptions {
-    iterative_deepening: bool,
+    debug: bool,
+    try_previous_pv: bool,
     ply_bonus: bool,
     default_ply: usize,
 }
@@ -620,7 +711,8 @@ struct EngineOptions {
 impl Default for EngineOptions {
     fn default() -> Self {
         Self {
-            iterative_deepening: true,
+            debug: false,
+            try_previous_pv: true,
             ply_bonus: true,
             default_ply: 7,
         }
@@ -636,6 +728,16 @@ struct SearchState {
     started_at: SystemTime,
     is_running: bool,
     metrics: MetricsService,
+}
+
+impl SearchState {
+    fn ponder_move(&self) -> Option<Move> {
+        self.principal_variation.as_ref().and_then(|pv| pv.get(1)).cloned()
+    }
+
+    fn elapsed(&self) -> Duration {
+        self.started_at.elapsed().unwrap()
+    }
 }
 
 impl Default for SearchState {
@@ -665,14 +767,8 @@ struct SearchFlags {
 #[derive(Default)]
 struct SearchParams {
     go: Go,
-}
-
-impl Default for SearchParams {
-    fn default() -> Self {
-        Self {
-            go: Go::EMPTY,
-        }
-    }
+    fen: Fen,
+    moves: Vec<Move>,
 }
 
 #[derive(Default)]
@@ -693,7 +789,11 @@ impl Metrics {
     }
 
     fn nps(&self) -> u64 {
-        ((self.total_nodes() as f64 / self.duration.as_nanos() as f64) * 1_000_000_000.0) as u64
+        self.nps_with_duration(&self.duration)
+    }
+
+    fn nps_with_duration(&self, duration: &Duration) -> u64 {
+        ((self.total_nodes() as f64 / duration.as_nanos() as f64) * 1_000_000_000.0) as u64
     }
 
     fn table_hit_rate(&self) -> f64 {
@@ -799,7 +899,7 @@ mod test {
 
     fn _test_threefold(moves: Vec<&str>, fen: Fen, move_to_draw: &str) {
         let (tx, rx) = channel();
-        let mut engine = Inkayaku::new(Arc::new(CommandUciTx::new(tx)));
+        let mut engine = Inkayaku::new(Arc::new(CommandUciTx::new(tx)), false);
 
         engine.accept(UciCommand::UciNewGame);
         let uci_moves = moves.into_iter().map(|s| UciMove::parse(s).unwrap()).collect();

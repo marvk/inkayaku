@@ -1,4 +1,5 @@
 use std::cell::RefCell;
+use std::cmp::max;
 use std::collections::{HashSet, VecDeque};
 use std::num::ParseIntError;
 use std::time::Duration;
@@ -167,7 +168,7 @@ impl<'a> CommandParser<'a> {
         Ok(GoCommand { go })
     }
 
-    fn parse_duration(&self) -> Result<Duration, ParserError> { self.next()?.parse().map_err(InvalidInt).map(Duration::from_millis) }
+    fn parse_duration(&self) -> Result<Duration, ParserError> { self.next()?.parse().map_err(InvalidInt).map(|d: i64| max(d, 0) as u64).map(Duration::from_millis) }
     fn parse_u64(&self) -> Result<u64, ParserError> { self.next()?.parse().map_err(InvalidInt) }
 
     fn parse_position(&self) -> Result<UciCommand, ParserError> {

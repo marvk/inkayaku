@@ -3,6 +3,7 @@ use std::ops::Deref;
 use std::sync::{Arc, Mutex};
 use std::sync::mpsc::{channel, Receiver, Sender};
 use std::thread;
+use std::time::Duration;
 
 use futures::executor::block_on;
 use futures::pin_mut;
@@ -17,8 +18,8 @@ use marvk_chess_lichess_api::api::bot_game_state_response::{BotGameState, Clock,
 use marvk_chess_lichess_api::api::BotApi;
 use marvk_chess_lichess_api::api::response::{GameStatusKey, SpeedKey, VariantFull, VariantKey};
 use marvk_chess_uci::uci::{Engine, Go, Info, ProtectionMessage, UciCommand, UciMove, UciTx, UciTxCommand};
-use marvk_chess_uci::uci::console::ConsoleUciTx;
 use marvk_chess_uci::uci::command::CommandUciTx;
+use marvk_chess_uci::uci::console::ConsoleUciTx;
 
 pub struct GameThread {
     bot_id: String,
@@ -118,6 +119,10 @@ impl GameThread {
                     engine.accept(UciCommand::PositionFrom { fen, moves });
                     engine.accept(UciCommand::Go {
                         go: Go {
+                            white_time: Some(Duration::from_millis(state.wtime as u64)),
+                            black_time: Some(Duration::from_millis(state.btime as u64)),
+                            white_increment: Some(Duration::from_millis(state.winc as u64)),
+                            black_increment: Some(Duration::from_millis(state.binc as u64)),
                             ..Go::default()
                         }
                     });
@@ -146,7 +151,7 @@ impl GameThread {
         let (tx, rx): (Sender<UciTxCommand>, _) = channel();
         Self::spawn_engine_rx_thread(rx, api, game_id);
 
-        Inkayaku::new(Arc::new(CommandUciTx::new(tx)))
+        Inkayaku::new(Arc::new(CommandUciTx::new(tx)), false)
     }
 
     fn spawn_engine_rx_thread(rx: Receiver<UciTxCommand>, api: Arc<BotApi>, game_id: &str) {
@@ -159,13 +164,10 @@ impl GameThread {
 
             while let Ok(command) = rx.recv() {
                 match command {
-                    UciTxCommand::BestMove { uci_move } => {
+                    UciTxCommand::BestMove { best_move: uci_move, .. } => {
                         if let Some(uci_move) = uci_move {
                             send_uci_move(uci_move);
                         }
-                    }
-                    UciTxCommand::BestMoveWithPonder { uci_move, .. } => {
-                        send_uci_move(uci_move);
                     }
                     UciTxCommand::Info { info } => {
                         println!("{:?}", info);

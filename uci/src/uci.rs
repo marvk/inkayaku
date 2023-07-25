@@ -271,8 +271,7 @@ pub enum UciTxCommand {
     IdAuthor { author: String },
     Ok,
     ReadyOk,
-    BestMove { uci_move: Option<UciMove> },
-    BestMoveWithPonder { uci_move: UciMove, ponder_uci_move: UciMove },
+    BestMove { best_move: Option<UciMove>, ponder_move: Option<UciMove> },
     CopyProtection { copy_protection: ProtectionMessage },
     Registration { registration: ProtectionMessage },
     Info { info: Info },
@@ -295,8 +294,7 @@ pub trait UciTx {
     fn id_author(&self, author: &str);
     fn uci_ok(&self);
     fn ready_ok(&self);
-    fn best_move(&self, uci_move: Option<UciMove>);
-    fn best_move_with_ponder(&self, uci_move: &UciMove, ponder_uci_move: &UciMove);
+    fn best_move(&self, uci_move: Option<UciMove>, ponder_uci_move: Option<UciMove>);
     fn copy_protection(&self, copy_protection: ProtectionMessage);
     fn registration(&self, registration: ProtectionMessage);
     fn info(&self, info: &Info);

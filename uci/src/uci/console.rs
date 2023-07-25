@@ -19,8 +19,8 @@ pub struct ConsoleUciTx<FConsumer: Fn(&str), FDebugConsumer: Fn(&str)> {
 }
 
 impl<FConsumer: Fn(&str), FDebugConsumer: Fn(&str)> ConsoleUciTx<FConsumer, FDebugConsumer> {
-    pub fn new(consumer: FConsumer, error_consumer: FDebugConsumer) -> Self {
-        Self { consumer, debug_consumer: error_consumer, debug: Mutex::new(false) }
+    pub fn new(consumer: FConsumer, error_consumer: FDebugConsumer, debug: bool) -> Self {
+        Self { consumer, debug_consumer: error_consumer, debug: Mutex::new(debug) }
     }
 
     pub fn set_debug(&self, debug: bool) {
@@ -67,17 +67,18 @@ impl<FConsumer: Fn(&str), FDebugConsumer: Fn(&str)> UciTx for ConsoleUciTx<FCons
         self.tx("readyok")
     }
 
-    fn best_move(&self, uci_move: Option<UciMove>) {
-        let move_string = match uci_move {
+    fn best_move(&self, best_move: Option<UciMove>, ponder_move: Option<UciMove>) {
+        let move_string = match best_move {
             Some(mv) => format!("{}", mv),
             None => "0000".to_string(),
         };
 
-        self.tx(&format!("bestmove {}", move_string))
-    }
+        let ponder_string = match ponder_move {
+            Some(ponder_mv) => format!(" ponder {}", ponder_mv),
+            None => "".to_string(),
+        };
 
-    fn best_move_with_ponder(&self, uci_move: &UciMove, ponder_uci_move: &UciMove) {
-        self.tx(&format!("bestmove {} ponder {}", uci_move, ponder_uci_move))
+        self.tx(&format!("bestmove {}{}", move_string, ponder_string))
     }
 
     fn copy_protection(&self, copy_protection: ProtectionMessage) {

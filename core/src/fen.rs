@@ -128,6 +128,12 @@ impl Fen {
     }
 }
 
+impl Default for Fen {
+    fn default() -> Self {
+        FEN_STARTPOS.clone()
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use crate::fen::{Fen, ParseFenError};
