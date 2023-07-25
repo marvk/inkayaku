@@ -373,8 +373,7 @@ mod tests {
         );
         assert_eq!(CommandParser::new(" go    searchmoves h4h6q a1a2 wtime 60001 winc 1001  btime 60000 binc 1000 movestogo 10 depth 11 nodes 20000 mate 10 movetime 999  something").parse(), Err(UnexpectedToken { actual: "something".to_string(), expected: format!("one of {:?}", CommandParser::GO_TOKENS) }));
         assert_eq!(CommandParser::new("go searchmoves h4h6x").parse(), Err(InvalidUciMove(ParseUciMoveError::InvalidFormat("h4h6x".to_string()))));
-        // Can't construct ParseIntError?
-        assert!(CommandParser::new("go btime -60000").parse().is_err());
+        assert_eq!(CommandParser::new("go btime -60000").parse(), Ok(GoCommand { go: Go { black_time: Some(Duration::from_millis(0)), ..Go::EMPTY } }));
     }
 
     #[test]

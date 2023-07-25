@@ -971,6 +971,10 @@ impl Bitboard {
 
 // Helpers
 impl Bitboard {
+    pub fn ply_clock(&self) -> u32 {
+        2 * (self.fullmove_clock - 1) + self.turn
+    }
+
     #[inline(always)]
     fn is_white_turn(&self) -> bool {
         self.turn == WHITE
@@ -1403,6 +1407,19 @@ mod tests {
     use marvk_chess_core::fen::Fen;
 
     use crate::board::Bitboard;
+
+    #[test]
+    fn test_ply_clock() {
+        let mut board = Bitboard::default();
+
+        for i in 0..100 {
+            assert_eq!(board.ply_clock(), i);
+
+            let moves = board.generate_legal_moves();
+
+            board.make(*moves.first().unwrap());
+        }
+    }
 
     #[test]
     #[ignore]

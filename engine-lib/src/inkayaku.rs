@@ -150,7 +150,7 @@ impl<T: UciTx, H: Heuristic, M: MoveOrder> Search<T, H, M> {
     fn set_position_from(&mut self, fen: Fen, moves: Vec<UciMove>) {
         let mut board = Bitboard::new(&fen);
         let mut zobrist_history = ZobristHistory::default();
-        zobrist_history.set(board.halfmove_clock as usize, board.zobrist_hash());
+        zobrist_history.set(board.ply_clock(), board.zobrist_hash());
 
         let mut bb_moves = Vec::new();
 
@@ -158,7 +158,7 @@ impl<T: UciTx, H: Heuristic, M: MoveOrder> Search<T, H, M> {
             match board.find_move(&uci.to_string()) {
                 Ok(mv) => {
                     board.make(mv);
-                    zobrist_history.set(board.halfmove_clock as usize, board.zobrist_hash());
+                    zobrist_history.set(board.ply_clock(), board.zobrist_hash());
                     bb_moves.push(mv);
                 }
                 Err(error) => {
@@ -258,50 +258,6 @@ impl<T: UciTx, H: Heuristic, M: MoveOrder> Search<T, H, M> {
         }
     }
 
-    fn calculate_ply(&self) -> u64 {
-        let bonus = self.options.ply_bonus;
-        let default_ply = self.options.default_ply;
-
-        if let Some(depth) = self.params.go.depth {
-            return depth;
-        } else if !bonus {
-            return default_ply as u64;
-        }
-
-        let time_remaining = self.self_time_remaining();
-        if time_remaining.is_none() {
-            return default_ply as u64;
-        }
-        let millis_remaining = time_remaining.unwrap().as_millis();
-
-
-        let time_malus: i64 = match millis_remaining {
-            60_000.. => 0,
-            20_000.. => -1,
-            7_500.. => -2,
-            1_000.. => -3,
-            _ => -4
-        };
-
-        let fast_play_bonus: i64 = if self.state.bitboard.fullmove_clock > 1 && self.state.metrics.last.table_hit_rate() < 0.75 {
-            match millis_remaining {
-                3_000..=30_000 => {
-                    let last_millis = self.state.metrics.last.duration.as_millis();
-                    match last_millis {
-                        100.. => 0,
-                        10.. => 1,
-                        _ => 2,
-                    }
-                }
-                _ => 0,
-            }
-        } else {
-            0
-        };
-
-        (default_ply as i64 + time_malus + fast_play_bonus) as u64
-    }
-
     /// Check if the last played move was the ponder move. If it was, calculate the current pv.
     fn try_set_pv_from_continuation(&mut self) {
         let last_ponder_move = self.state.ponder_move();
@@ -363,8 +319,6 @@ impl<T: UciTx, H: Heuristic, M: MoveOrder> Search<T, H, M> {
         if self.params.go.move_time.is_none() {
             self.params.go.move_time = self.calculate_max_thinking_time().map(|d| d.mul(2));
         }
-
-        dbg!(self.calculate_max_thinking_time());
 
         let mut uci_pv = None;
         let mut score = None;
@@ -432,7 +386,7 @@ impl<T: UciTx, H: Heuristic, M: MoveOrder> Search<T, H, M> {
     }
 
     fn evaluate(&self, color: ColorBits, legal_moves_remaining: bool) -> i32 {
-        self::heuristic_factor(color) * self.heuristic.evaluate(&self.state.bitboard, legal_moves_remaining)
+        heuristic_factor(color) * self.heuristic.evaluate(&self.state.bitboard, legal_moves_remaining)
     }
 
     fn negamax(&mut self, buffer: &mut Vec<Move>, depth: usize, ply: usize, alpha_original: i32, beta_original: i32, pv: bool) -> ValuedMove {
@@ -457,10 +411,13 @@ impl<T: UciTx, H: Heuristic, M: MoveOrder> Search<T, H, M> {
         self.state.metrics.increment_negamax_nodes();
 
         let zobrist = self.state.bitboard.zobrist_hash();
-        let halfmove_clock = self.board().halfmove_clock as usize;
-        self.state.zobrist_history.set(halfmove_clock, zobrist);
-        if self.state.zobrist_history.is_threefold_repetition(halfmove_clock) {
-            return ValuedMove::leaf(self.heuristic.draw_score());
+        let ply_clock = self.board().ply_clock();
+        let halfmove_clock = self.board().halfmove_clock;
+        self.state.zobrist_history.set(ply_clock, zobrist);
+        if self.state.zobrist_history.is_threefold_repetition(ply_clock, halfmove_clock) {
+            let contempt_factor_factor = if (ply - depth) % 2 == 0 { 1 } else { -1 };
+
+            return ValuedMove::leaf(self.heuristic.draw_score() + contempt_factor_factor * self.options.contempt_factor);
         }
 
         let maybe_tt_entry = self.state.transposition_table.get(zobrist);
@@ -704,8 +661,8 @@ pub enum SearchMessage {
 struct EngineOptions {
     debug: bool,
     try_previous_pv: bool,
-    ply_bonus: bool,
     default_ply: usize,
+    contempt_factor: i32,
 }
 
 impl Default for EngineOptions {
@@ -713,8 +670,8 @@ impl Default for EngineOptions {
         Self {
             debug: false,
             try_previous_pv: true,
-            ply_bonus: true,
             default_ply: 7,
+            contempt_factor: -99999,
         }
     }
 }
@@ -897,6 +854,18 @@ mod test {
         _test_threefold(moves, fen, move_to_draw);
     }
 
+    #[test]
+    fn test_threefold_3() {
+        let fen = Fen::new("5r1k/5r2/p7/2pNp1q1/2P1P2p/1P3P1P/P4RP1/5RK1 b - - 0 28").unwrap();
+        let moves = vec![
+            "h8g8",
+            "d5b6", "g5e3", "b6d5", "e3g5",
+            "d5b6", "g5e3",
+        ];
+        let move_to_draw = "b6d5";
+        _test_threefold(moves, fen, move_to_draw);
+    }
+
     fn _test_threefold(moves: Vec<&str>, fen: Fen, move_to_draw: &str) {
         let (tx, rx) = channel();
         let mut engine = Inkayaku::new(Arc::new(CommandUciTx::new(tx)), false);
@@ -904,7 +873,7 @@ mod test {
         engine.accept(UciCommand::UciNewGame);
         let uci_moves = moves.into_iter().map(|s| UciMove::parse(s).unwrap()).collect();
         engine.accept(UciCommand::PositionFrom { fen, moves: uci_moves });
-        engine.accept(UciCommand::Go { go: Go { search_moves: vec![UciMove::parse(move_to_draw).unwrap()], ..Go::default() } });
+        engine.accept(UciCommand::Go { go: Go { depth: Some(5), search_moves: vec![UciMove::parse(move_to_draw).unwrap()], ..Go::default() } });
 
         let mut commands = Vec::new();
 
