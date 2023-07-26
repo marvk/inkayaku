@@ -1023,8 +1023,8 @@ impl Bitboard {
 
 // Helpers
 impl Bitboard {
-    pub fn ply_clock(&self) -> u32 {
-        2 * (self.fullmove_clock - 1) + self.turn
+    pub fn ply_clock(&self) -> u16 {
+        (2 * (self.fullmove_clock - 1) + self.turn) as u16
     }
 
     #[inline(always)]

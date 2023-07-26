@@ -6,11 +6,11 @@ pub struct ZobristHistory {
 }
 
 impl ZobristHistory {
-    pub fn set(&mut self, index: u32, zobrist_hash: ZobristHash) {
+    pub fn set(&mut self, index: u16, zobrist_hash: ZobristHash) {
         self.history[index as usize] = zobrist_hash;
     }
 
-    pub fn count_repetitions(&self, start_index: u32, halfmove_clock: u32) -> usize {
+    pub fn count_repetitions(&self, start_index: u16, halfmove_clock: u16) -> usize {
         if start_index < 4 {
             return 0;
         }

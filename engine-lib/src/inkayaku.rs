@@ -306,6 +306,8 @@ impl<T: UciTx, H: Heuristic, M: MoveOrder> Search<T, H, M> {
     }
 
     fn best_move(&mut self) -> (Option<UciMove>, Option<UciMove>) {
+        self.state.transposition_table.clear();
+
         self.state.started_at = SystemTime::now();
 
         let mut best_move = None;
@@ -319,6 +321,8 @@ impl<T: UciTx, H: Heuristic, M: MoveOrder> Search<T, H, M> {
         if self.params.go.move_time.is_none() {
             self.params.go.move_time = self.calculate_max_thinking_time().map(|d| d.mul(2));
         }
+
+        let max_thinking_time = self.params.go.move_time.unwrap_or(Duration::MAX);
 
         let mut uci_pv = None;
         let mut score = None;
@@ -335,8 +339,11 @@ impl<T: UciTx, H: Heuristic, M: MoveOrder> Search<T, H, M> {
             );
 
             let elapsed = self.state.elapsed();
-            let max_thinking_time = self.params.go.move_time.unwrap_or(Duration::MAX);
-            let stop = self.flags.stop_as_soon_as_possible || elapsed > max_thinking_time.div(3) || current_best_move.mv.is_none();
+
+            let too_little_time = elapsed > max_thinking_time.div(3);
+            let aborted = self.flags.stop_as_soon_as_possible || current_best_move.mv.is_none();
+            let stop = aborted || too_little_time;
+
             if !stop {
                 let bb_pv = principal_variation(&current_best_move);
                 self.state.principal_variation = Some(bb_pv.iter().map(|&&mv| mv).collect());
@@ -354,7 +361,7 @@ impl<T: UciTx, H: Heuristic, M: MoveOrder> Search<T, H, M> {
                 principal_variation: uci_pv.clone(),
                 time: Some(elapsed),
                 score,
-                depth: Some((if stop { depth - 1 } else { depth }) as u32),
+                depth: Some((if aborted { depth - 1 } else { depth }) as u32),
                 string: self.debug_string(),
                 ..self.generate_info()
             });
@@ -422,7 +429,8 @@ impl<T: UciTx, H: Heuristic, M: MoveOrder> Search<T, H, M> {
         let ply_clock = self.board().ply_clock();
         let halfmove_clock = self.board().halfmove_clock;
         self.state.zobrist_history.set(ply_clock, zobrist);
-        if self.state.zobrist_history.count_repetitions(ply_clock, halfmove_clock) >= 2 {
+
+        if self.state.zobrist_history.count_repetitions(ply_clock, halfmove_clock as u16) >= 3 {
             let contempt_factor_factor = if (ply - depth) % 2 == 0 { 1 } else { -1 };
 
             // todo if depth == ply, null move
@@ -679,7 +687,7 @@ impl Default for EngineOptions {
         Self {
             debug: false,
             try_previous_pv: true,
-            contempt_factor: -99999,
+            contempt_factor: -10,
         }
     }
 }
@@ -842,6 +850,61 @@ mod test {
     use marvk_chess_uci::uci::command::CommandUciTx;
 
     use crate::inkayaku::{heuristic_factor, Inkayaku};
+
+    #[test]
+    fn test_threefold() {
+        let (tx, rx) = channel();
+        let mut engine = Inkayaku::new(Arc::new(CommandUciTx::new(tx)), false);
+        engine.accept(UciCommand::UciNewGame);
+
+        let wait_for_best_move = || {
+            rx.iter().filter(|m| matches!(m, UciTxCommand::BestMove {..})).take(1).last().unwrap()
+        };
+
+        let moves = vec!["b1c3", "b8c6", "d2d4", "d7d5", "e2e4", "e7e6", "e4e5", "f8b4", "g1e2", "g8e7", "c1f4", "e8g8", "d1d3", "f7f6", "e5f6", "f8f6", "e1c1", "b4d6", "f4d6", "c7d6", "d3e3", "e6e5", "d4e5", "d6e5", "c3e4", "f6f7", "c1b1", "d8c7", "e4g5", "f7f8", "e2c3", "c6d4", "f1d3", "h7h6", "g5f3", "d4f3", "g2f3", "d5d4", "c3b5", "c7c2", "b1c2", "d4e3", "f2e3", "f8f3", "b5c7", "a8b8", "d3c4", "g8h7", "e3e4", "c8g4", "c4e6", "g4e6", "c7e6", "b8c8", "c2b1", "f3f6", "e6d8", "c8c7", "d1d3", "a7a6", "h1c1", "c7c1", "b1c1", "f6f1", "c1c2", "f1f4", "d3d7", "e7c6", "d8e6", "f4e4", "d7g7", "h7h8", "g7b7", "e4h4", "b7c7", "h4h2", "c2c3", "c6d4", "e6d4", "e5d4", "c3d4", "h2b2", "a2a3", "b2a2", "c7c8", "h8g7", "c8c7", "g7f8", "c7h7", "a2a3", "h7h6", "f8e7", "h6b6", "a3a2", "d4d3"].into_iter().map(|s| UciMove::parse(s).unwrap()).collect::<Vec<_>>();
+        let go = Go {
+            depth: Some(8),
+            ..Go::default()
+        };
+        engine.accept(UciCommand::PositionFrom { fen: Fen::default(), moves });
+        engine.accept(UciCommand::Go { go });
+        wait_for_best_move();
+
+        let moves = vec!["b1c3", "b8c6", "d2d4", "d7d5", "e2e4", "e7e6", "e4e5", "f8b4", "g1e2", "g8e7", "c1f4", "e8g8", "d1d3", "f7f6", "e5f6", "f8f6", "e1c1", "b4d6", "f4d6", "c7d6", "d3e3", "e6e5", "d4e5", "d6e5", "c3e4", "f6f7", "c1b1", "d8c7", "e4g5", "f7f8", "e2c3", "c6d4", "f1d3", "h7h6", "g5f3", "d4f3", "g2f3", "d5d4", "c3b5", "c7c2", "b1c2", "d4e3", "f2e3", "f8f3", "b5c7", "a8b8", "d3c4", "g8h7", "e3e4", "c8g4", "c4e6", "g4e6", "c7e6", "b8c8", "c2b1", "f3f6", "e6d8", "c8c7", "d1d3", "a7a6", "h1c1", "c7c1", "b1c1", "f6f1", "c1c2", "f1f4", "d3d7", "e7c6", "d8e6", "f4e4", "d7g7", "h7h8", "g7b7", "e4h4", "b7c7", "h4h2", "c2c3", "c6d4", "e6d4", "e5d4", "c3d4", "h2b2", "a2a3", "b2a2", "c7c8", "h8g7", "c8c7", "g7f8", "c7h7", "a2a3", "h7h6", "f8e7", "h6b6", "a3a2", "d4d3", "a2a5", "d3d4"].into_iter().map(|s| UciMove::parse(s).unwrap()).collect::<Vec<_>>();
+        let go = Go {
+            depth: Some(10),
+            ..Go::default()
+        };
+        engine.accept(UciCommand::PositionFrom { fen: Fen::default(), moves });
+        engine.accept(UciCommand::Go { go });
+        wait_for_best_move();
+
+        let moves = vec!["b1c3", "b8c6", "d2d4", "d7d5", "e2e4", "e7e6", "e4e5", "f8b4", "g1e2", "g8e7", "c1f4", "e8g8", "d1d3", "f7f6", "e5f6", "f8f6", "e1c1", "b4d6", "f4d6", "c7d6", "d3e3", "e6e5", "d4e5", "d6e5", "c3e4", "f6f7", "c1b1", "d8c7", "e4g5", "f7f8", "e2c3", "c6d4", "f1d3", "h7h6", "g5f3", "d4f3", "g2f3", "d5d4", "c3b5", "c7c2", "b1c2", "d4e3", "f2e3", "f8f3", "b5c7", "a8b8", "d3c4", "g8h7", "e3e4", "c8g4", "c4e6", "g4e6", "c7e6", "b8c8", "c2b1", "f3f6", "e6d8", "c8c7", "d1d3", "a7a6", "h1c1", "c7c1", "b1c1", "f6f1", "c1c2", "f1f4", "d3d7", "e7c6", "d8e6", "f4e4", "d7g7", "h7h8", "g7b7", "e4h4", "b7c7", "h4h2", "c2c3", "c6d4", "e6d4", "e5d4", "c3d4", "h2b2", "a2a3", "b2a2", "c7c8", "h8g7", "c8c7", "g7f8", "c7h7", "a2a3", "h7h6", "f8e7", "h6b6", "a3a2", "d4d3", "a2a5", "d3d4", "a5a2", "d4d3"].into_iter().map(|s| UciMove::parse(s).unwrap()).collect::<Vec<_>>();
+        let go = Go {
+            depth: Some(9),
+            ..Go::default()
+        };
+        engine.accept(UciCommand::PositionFrom { fen: Fen::default(), moves });
+        engine.accept(UciCommand::Go { go });
+        wait_for_best_move();
+
+        let moves = vec!["b1c3", "b8c6", "d2d4", "d7d5", "e2e4", "e7e6", "e4e5", "f8b4", "g1e2", "g8e7", "c1f4", "e8g8", "d1d3", "f7f6", "e5f6", "f8f6", "e1c1", "b4d6", "f4d6", "c7d6", "d3e3", "e6e5", "d4e5", "d6e5", "c3e4", "f6f7", "c1b1", "d8c7", "e4g5", "f7f8", "e2c3", "c6d4", "f1d3", "h7h6", "g5f3", "d4f3", "g2f3", "d5d4", "c3b5", "c7c2", "b1c2", "d4e3", "f2e3", "f8f3", "b5c7", "a8b8", "d3c4", "g8h7", "e3e4", "c8g4", "c4e6", "g4e6", "c7e6", "b8c8", "c2b1", "f3f6", "e6d8", "c8c7", "d1d3", "a7a6", "h1c1", "c7c1", "b1c1", "f6f1", "c1c2", "f1f4", "d3d7", "e7c6", "d8e6", "f4e4", "d7g7", "h7h8", "g7b7", "e4h4", "b7c7", "h4h2", "c2c3", "c6d4", "e6d4", "e5d4", "c3d4", "h2b2", "a2a3", "b2a2", "c7c8", "h8g7", "c8c7", "g7f8", "c7h7", "a2a3", "h7h6", "f8e7", "h6b6", "a3a2", "d4d3", "a2a5", "d3d4", "a5a2", "d4d3", "a2a5", "d3d4"].into_iter().map(|s| UciMove::parse(s).unwrap()).collect::<Vec<_>>();
+        let go = Go {
+            depth: Some(10),
+            // search_moves: vec![UciMove::parse("a5a2").unwrap()],
+            ..Go::default()
+        };
+        engine.accept(UciCommand::PositionFrom { fen: Fen::default(), moves });
+        engine.accept(UciCommand::Go { go });
+        while let Ok(c) = rx.recv() {
+            dbg!(&c);
+
+            if let UciTxCommand::BestMove { .. } = c {
+                break;
+            }
+        }
+    }
+
 
     #[test]
     fn test_threefold_1() {
