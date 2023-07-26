@@ -442,6 +442,8 @@ impl<T: UciTx, H: Heuristic, M: MoveOrder> Search<T, H, M> {
         let mut alpha = alpha_original;
         let mut beta = beta_original;
 
+        let mut tt_move = None;
+
         if let Some(tt_entry) = maybe_tt_entry {
             if tt_entry.depth >= depth {
                 self.state.metrics.increment_transposition_hits();
@@ -455,6 +457,8 @@ impl<T: UciTx, H: Heuristic, M: MoveOrder> Search<T, H, M> {
                 if alpha >= beta {
                     return tt_entry.mv.clone();
                 }
+
+                tt_move = tt_entry.mv.mv;
             }
         };
 
@@ -482,7 +486,7 @@ impl<T: UciTx, H: Heuristic, M: MoveOrder> Search<T, H, M> {
         }
 
         let pv_move = if pv { self.state.principal_variation.as_ref().unwrap().get(ply - depth).copied() } else { None };
-        self.move_order.sort(buffer, pv_move);
+        self.move_order.sort(buffer, pv_move, tt_move);
 
         let mut best_value = self.heuristic.loss_score();
         let mut best_child: Option<ValuedMove> = None;
@@ -519,7 +523,6 @@ impl<T: UciTx, H: Heuristic, M: MoveOrder> Search<T, H, M> {
             alpha = max(alpha, best_value);
 
             self.board().unmake(*mv);
-
 
             if alpha >= beta {
                 break;
@@ -586,7 +589,7 @@ impl<T: UciTx, H: Heuristic, M: MoveOrder> Search<T, H, M> {
 
         buffer.clear();
         self.board().generate_pseudo_legal_non_quiescent_moves_with_buffer(buffer);
-        self.move_order.sort(buffer, None);
+        self.move_order.sort(buffer, None, None);
 
         for mv in buffer {
             self.board().make(*mv);

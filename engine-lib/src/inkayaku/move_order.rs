@@ -3,7 +3,7 @@ use std::cmp::Reverse;
 use marvk_chess_board::board::Move;
 
 pub trait MoveOrder {
-    fn sort(&self, moves: &mut Vec<Move>, pv_move: Option<Move>);
+    fn sort(&self, moves: &mut Vec<Move>, pv_move: Option<Move>, tt_move: Option<Move>);
 }
 
 #[derive(Default)]
@@ -16,15 +16,15 @@ impl MvvLvaMoveOrder {
     }
 
     #[inline(always)]
-    fn pv_move_bonus(pv_move: Option<Move>, mv: &Move) -> i32 {
-        pv_move.filter(|pv_move| pv_move.bits == mv.bits).map(|_| 100000).unwrap_or(0)
+    fn move_bonus(mv: &Move, pv_move: Option<Move>, bonus: i32) -> i32 {
+        pv_move.filter(|pv_move| pv_move.bits == mv.bits).map(|_| bonus).unwrap_or(0)
     }
 }
 
 impl MoveOrder for MvvLvaMoveOrder {
-    fn sort(&self, moves: &mut Vec<Move>, pv_move: Option<Move>) {
+    fn sort(&self, moves: &mut Vec<Move>, pv_move: Option<Move>, tt_move: Option<Move>) {
         // moves.shuffle(&mut thread_rng());
-        moves.sort_by_key(|mv| Reverse(Self::eval(mv) + Self::pv_move_bonus(pv_move, mv)));
+        moves.sort_by_key(|mv| Reverse(Self::eval(mv) + Self::move_bonus(mv, pv_move, 900_000) + Self::move_bonus(mv, tt_move, 800_000)));
     }
 }
 
@@ -43,7 +43,7 @@ mod tests {
 
         let order = MvvLvaMoveOrder {};
 
-        order.sort(&mut moves, None);
+        order.sort(&mut moves, None, None);
 
         for mv in moves {
             println!("{}", mv.to_pgn_string(&mut bitboard).unwrap());
