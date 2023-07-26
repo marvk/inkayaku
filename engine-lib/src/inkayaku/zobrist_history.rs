@@ -1,25 +1,25 @@
 use std::cmp::max;
-use std::ops::Sub;
+use marvk_chess_board::board::constants::ZobristHash;
 
 pub struct ZobristHistory {
-    history: [u64; 5000],
+    history: [ZobristHash; 5000],
 }
 
 impl ZobristHistory {
-    pub fn set(&mut self, index: u32, zobrist_hash: u64) {
+    pub fn set(&mut self, index: u32, zobrist_hash: ZobristHash) {
         self.history[index as usize] = zobrist_hash;
     }
 
-    pub fn is_threefold_repetition(&self, start_index: u32, halfmove_clock: u32) -> bool {
-        if start_index < 8 {
-            return false;
+    pub fn count_repetitions(&self, start_index: u32, halfmove_clock: u32) -> usize {
+        if start_index < 4 {
+            return 0;
         }
 
         let mut current_index = start_index as i32 - 4;
         let mut repetitions = 1_usize;
         let zobrist = self.history[start_index as usize];
 
-        let min_index = max(0, (start_index as i32 - halfmove_clock as i32));
+        let min_index = max(0, start_index as i32 - halfmove_clock as i32);
 
         while current_index >= min_index {
             let current_zobrist = self.history[current_index as usize];
@@ -27,14 +27,14 @@ impl ZobristHistory {
                 repetitions += 1;
 
                 if repetitions >= 3 {
-                    return true;
+                    return 3;
                 }
             }
 
             current_index -= 2;
         }
 
-        false
+        repetitions
     }
 }
 
@@ -63,8 +63,8 @@ mod test {
         history.set(9, 4);
         history.set(10, 1);
 
-        assert!(history.is_threefold_repetition(10, 8));
-        assert!(!history.is_threefold_repetition(10, 7));
-        assert!(!history.is_threefold_repetition(10, 6));
+        assert_eq!(history.count_repetitions(10, 8), 3);
+        assert_ne!(history.count_repetitions(10, 7), 3);
+        assert_ne!(history.count_repetitions(10, 6), 3);
     }
 }

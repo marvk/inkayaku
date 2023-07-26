@@ -36,7 +36,7 @@ impl UciTx for CommandUciTx {
     }
 
     fn best_move(&self, best_move: Option<UciMove>, ponder_move: Option<UciMove>) {
-        self.send(UciTxCommand::BestMove { best_move: best_move, ponder_move: ponder_move });
+        self.send(UciTxCommand::BestMove { best_move, ponder_move });
     }
 
     fn copy_protection(&self, copy_protection: ProtectionMessage) {

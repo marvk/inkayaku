@@ -3,7 +3,7 @@ extern crate core;
 use marvk_chess_core::constants::piece::Piece;
 use marvk_chess_core::constants::square::Square;
 
-use crate::board::constants::{OccupancyBits, PieceBits, SquareMaskBits, SquareShiftBits};
+use crate::board::constants::{ColorBits, OccupancyBits, PieceBits, SquareMaskBits, SquareShiftBits};
 
 pub mod board;
 
@@ -38,6 +38,11 @@ pub fn piece_to_string(piece_bits: PieceBits) -> String {
 
 pub fn square_to_string(square_shift_bits: SquareShiftBits) -> String {
     Square::by_index(square_shift_bits as usize).map(|s| s.fen()).unwrap_or_else(|| "-".to_string())
+}
+
+#[inline(always)]
+pub fn opposite_color(color_bits: ColorBits) -> ColorBits {
+    1 - color_bits
 }
 
 #[inline(always)]

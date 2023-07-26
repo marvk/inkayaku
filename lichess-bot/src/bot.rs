@@ -1,6 +1,6 @@
-use std::cell::{Cell, RefCell, RefMut};
-use std::ops::Deref;
-use std::sync::{Arc, Mutex};
+use std::cell::{RefCell, RefMut};
+
+use std::sync::{Arc};
 use std::sync::mpsc::{channel, Receiver, Sender};
 use std::thread;
 use std::time::Duration;
@@ -17,9 +17,9 @@ use marvk_chess_lichess_api::api::bot_event_response::ChallengeEventDeclineReaso
 use marvk_chess_lichess_api::api::bot_game_state_response::{BotGameState, Clock, GameStateHolder};
 use marvk_chess_lichess_api::api::BotApi;
 use marvk_chess_lichess_api::api::response::{GameStatusKey, SpeedKey, VariantFull, VariantKey};
-use marvk_chess_uci::uci::{Engine, Go, Info, ProtectionMessage, UciCommand, UciMove, UciTx, UciTxCommand};
+use marvk_chess_uci::uci::{Engine, Go, UciCommand, UciMove, UciTxCommand};
 use marvk_chess_uci::uci::command::CommandUciTx;
-use marvk_chess_uci::uci::console::ConsoleUciTx;
+
 
 pub struct GameThread {
     bot_id: String,
@@ -54,7 +54,7 @@ impl GameThread {
     }
 
     pub async fn start(self) {
-        println!("STARTIE GAME THREAD");
+        println!("START GAME THREAD");
         let stream = self.api.stream_bot_game_state(&self.game_id).await.unwrap();
         pin_mut!(stream);
 
@@ -164,10 +164,8 @@ impl GameThread {
 
             while let Ok(command) = rx.recv() {
                 match command {
-                    UciTxCommand::BestMove { best_move: uci_move, .. } => {
-                        if let Some(uci_move) = uci_move {
-                            send_uci_move(uci_move);
-                        }
+                    UciTxCommand::BestMove { best_move: Some(uci_move), .. } => {
+                        send_uci_move(uci_move);
                     }
                     UciTxCommand::Info { info } => {
                         println!("{:?}", info);

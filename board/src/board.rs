@@ -8,7 +8,7 @@ use marvk_chess_core::constants::piece::Piece;
 use marvk_chess_core::constants::square::Square;
 use marvk_chess_core::fen::{Fen, FEN_STARTPOS};
 
-use crate::{mask_and_shift_from_lowest_one_bit, piece_to_string, square_to_string};
+use crate::{mask_and_shift_from_lowest_one_bit, opposite_color, piece_to_string, square_to_string};
 use crate::board::constants::*;
 use crate::board::MoveFromUciError::{MoveDoesNotExist, MoveIsNotValid};
 use crate::board::precalculated::magic::{BISHOP_MAGICS, Magics, ROOK_MAGICS};
@@ -19,15 +19,13 @@ pub mod constants;
 mod precalculated;
 mod zobrist;
 
-#[derive(Eq, PartialEq, Hash, Copy, Clone)]
+#[derive(Eq, PartialEq, Hash, Copy, Clone, Default)]
 pub struct Move {
     pub bits: u64,
     pub mvvlva: i32,
 }
 
 impl Move {
-    pub const NULL: Move = Move { bits: 0, mvvlva: 0 };
-
     #[inline(always)]
     pub fn get_piece_moved(&self) -> PieceBits { (self.bits & PIECE_MOVED_MASK) >> PIECE_MOVED_SHIFT }
     #[inline(always)]
@@ -58,6 +56,8 @@ impl Move {
     pub fn get_next_en_passant_square(&self) -> SquareShiftBits { ((self.bits & NEXT_EN_PASSANT_SQUARE_MASK) >> NEXT_EN_PASSANT_SQUARE_SHIFT) as SquareShiftBits }
     #[inline(always)]
     pub fn get_promotion_piece(&self) -> PieceBits { (self.bits & PROMOTION_PIECE_MASK) >> PROMOTION_PIECE_SHIFT }
+    #[inline(always)]
+    pub fn get_side_to_move(&self) -> ColorBits { ((self.bits & SIDE_TO_MOVE_MASK) >> SIDE_TO_MOVE_SHIFT) as ColorBits }
 
     #[inline(always)]
     pub fn set_piece_moved(&mut self, value: PieceBits) { self.bits |= value << PIECE_MOVED_SHIFT }
@@ -89,10 +89,25 @@ impl Move {
     pub fn set_next_en_passant_square(&mut self, value: SquareShiftBits) { self.bits |= (value as u64) << NEXT_EN_PASSANT_SQUARE_SHIFT }
     #[inline(always)]
     pub fn set_promotion_piece(&mut self, value: PieceBits) { self.bits |= value << PROMOTION_PIECE_SHIFT }
+    #[inline(always)]
+    pub fn set_side_to_move(&mut self, value: ColorBits) { self.bits |= (value as u64) << SIDE_TO_MOVE_SHIFT }
 
     #[inline(always)]
+    pub fn is_self_lost_king_side_castle(&self) -> bool { self.get_self_lost_king_side_castle() != 0 }
+    #[inline(always)]
+    pub fn is_self_lost_queen_side_castle(&self) -> bool { self.get_self_lost_queen_side_castle() != 0 }
+    #[inline(always)]
+    pub fn is_opponent_lost_king_side_castle(&self) -> bool { self.get_opponent_lost_king_side_castle() != 0 }
+    #[inline(always)]
+    pub fn is_opponent_lost_queen_side_castle(&self) -> bool { self.get_opponent_lost_queen_side_castle() != 0 }
+    #[inline(always)]
+    pub fn is_en_passant_attack(&self) -> bool { self.get_en_passant_attack() != 0 }
+    #[inline(always)]
+    pub fn is_castle_move(&self) -> bool { self.get_castle_move() != 0 }
+    #[inline(always)]
+    pub fn is_halfmove_reset(&self) -> bool { self.get_halfmove_reset() != 0 }
+    #[inline(always)]
     pub fn is_attack(&self) -> bool { self.get_piece_attacked() != NO_PIECE }
-
     #[inline(always)]
     pub fn is_promotion(&self) -> bool { self.get_promotion_piece() != NO_PIECE }
 
@@ -147,55 +162,64 @@ pub enum MoveFromUciError {
     MoveIsNotValid(Move),
 }
 
-#[derive(Eq, PartialEq, Copy, Clone, Debug)]
+#[derive(Eq, PartialEq, Copy, Clone, Debug, Default)]
 pub struct PlayerState {
-    pub kings: OccupancyBits,
-    pub queens: OccupancyBits,
-    pub rooks: OccupancyBits,
-    pub bishops: OccupancyBits,
-    pub knights: OccupancyBits,
-    pub pawns: OccupancyBits,
+    occupancy: [OccupancyBits; 7],
     pub queen_side_castle: bool,
     pub king_side_castle: bool,
 }
 
 impl PlayerState {
-    pub const EMPTY: Self = Self { kings: 0, queens: 0, rooks: 0, bishops: 0, knights: 0, pawns: 0, queen_side_castle: false, king_side_castle: false };
-
-    pub const fn new(kings: OccupancyBits, queens: OccupancyBits, rooks: OccupancyBits, bishops: OccupancyBits, knights: OccupancyBits, pawns: OccupancyBits, queen_side_castle: bool, king_side_castle: bool) -> Self {
-        Self { kings, queens, rooks, bishops, knights, pawns, queen_side_castle, king_side_castle }
+    fn full_occupancy(&self) -> OccupancyBits {
+        self.kings() | self.queens() | self.rooks() | self.bishops() | self.knights() | self.pawns()
     }
 
-    fn occupancy(&self) -> OccupancyBits {
-        self.kings | self.queens | self.rooks | self.bishops | self.knights | self.pawns
-    }
+    #[inline(always)]
+    fn occupancy_ref(&mut self, piece: PieceBits) -> &mut OccupancyBits { &mut self.occupancy[piece as usize] }
+    #[inline(always)]
+    fn kings_ref(&mut self) -> &mut OccupancyBits { &mut self.occupancy[KING as usize] }
+    #[inline(always)]
+    fn queens_ref(&mut self) -> &mut OccupancyBits { &mut self.occupancy[QUEEN as usize] }
+    #[inline(always)]
+    fn rooks_ref(&mut self) -> &mut OccupancyBits { &mut self.occupancy[ROOK as usize] }
+    #[inline(always)]
+    fn bishops_ref(&mut self) -> &mut OccupancyBits { &mut self.occupancy[BISHOP as usize] }
+    #[inline(always)]
+    fn knights_ref(&mut self) -> &mut OccupancyBits { &mut self.occupancy[KNIGHT as usize] }
+    #[inline(always)]
+    fn pawns_ref(&mut self) -> &mut OccupancyBits { &mut self.occupancy[PAWN as usize] }
 
-    fn unset_all(&mut self, occupancy: OccupancyBits) {
-        let not_occupancy = !occupancy;
-        self.kings &= not_occupancy;
-        self.queens &= not_occupancy;
-        self.rooks &= not_occupancy;
-        self.bishops &= not_occupancy;
-        self.knights &= not_occupancy;
-        self.pawns &= not_occupancy;
-    }
+    #[inline(always)]
+    fn occupancy(&self, piece: PieceBits) -> OccupancyBits { self.occupancy[piece as usize] }
+    #[inline(always)]
+    pub fn kings(&self) -> OccupancyBits { self.occupancy[KING as usize] }
+    #[inline(always)]
+    pub fn queens(&self) -> OccupancyBits { self.occupancy[QUEEN as usize] }
+    #[inline(always)]
+    pub fn rooks(&self) -> OccupancyBits { self.occupancy[ROOK as usize] }
+    #[inline(always)]
+    pub fn bishops(&self) -> OccupancyBits { self.occupancy[BISHOP as usize] }
+    #[inline(always)]
+    pub fn knights(&self) -> OccupancyBits { self.occupancy[KNIGHT as usize] }
+    #[inline(always)]
+    pub fn pawns(&self) -> OccupancyBits { self.occupancy[PAWN as usize] }
 
     fn get_piece_const_by_square_shift(&self, square_shift: SquareShiftBits) -> PieceBits {
         self.get_piece_const_by_square_mask(1_u64 << square_shift)
     }
 
     fn get_piece_const_by_square_mask(&self, square_mask: SquareMaskBits) -> PieceBits {
-        if (self.pawns & square_mask) != 0 {
+        if (self.pawns() & square_mask) != 0 {
             PAWN
-        } else if (self.knights & square_mask) != 0 {
+        } else if (self.knights() & square_mask) != 0 {
             KNIGHT
-        } else if (self.bishops & square_mask) != 0 {
+        } else if (self.bishops() & square_mask) != 0 {
             BISHOP
-        } else if (self.rooks & square_mask) != 0 {
+        } else if (self.rooks() & square_mask) != 0 {
             ROOK
-        } else if (self.queens & square_mask) != 0 {
+        } else if (self.queens() & square_mask) != 0 {
             QUEEN
-        } else if (self.kings & square_mask) != 0 {
+        } else if (self.kings() & square_mask) != 0 {
             KING
         } else {
             NO_PIECE
@@ -207,21 +231,7 @@ impl PlayerState {
     }
 
     fn find_piece_struct_by_square_mask(&self, square: SquareMaskBits) -> Option<Piece> {
-        if (self.pawns & square) != 0 {
-            Some(Piece::PAWN)
-        } else if (self.knights & square) != 0 {
-            Some(Piece::KNIGHT)
-        } else if (self.bishops & square) != 0 {
-            Some(Piece::BISHOP)
-        } else if (self.rooks & square) != 0 {
-            Some(Piece::ROOK)
-        } else if (self.queens & square) != 0 {
-            Some(Piece::QUEEN)
-        } else if (self.kings & square) != 0 {
-            Some(Piece::KING)
-        } else {
-            None
-        }
+        Piece::by_index(self.get_piece_const_by_square_mask(square) as usize)
     }
 }
 
@@ -244,8 +254,8 @@ impl Default for Bitboard {
 // Instantiation
 impl Bitboard {
     pub fn new(fen: &Fen) -> Self {
-        let mut white = PlayerState::EMPTY;
-        let mut black = PlayerState::EMPTY;
+        let mut white = PlayerState::default();
+        let mut black = PlayerState::default();
 
         fen.get_piece_placement().split('/').enumerate().for_each(|(rank_index, file)| {
             let mut file_index = 0;
@@ -257,12 +267,12 @@ impl Bitboard {
                     let board = if c.is_uppercase() { &mut white } else { &mut black };
 
                     let pieces = match c.to_ascii_lowercase() {
-                        'p' => &mut board.pawns,
-                        'n' => &mut board.knights,
-                        'b' => &mut board.bishops,
-                        'r' => &mut board.rooks,
-                        'q' => &mut board.queens,
-                        'k' => &mut board.kings,
+                        'p' => board.pawns_ref(),
+                        'n' => board.knights_ref(),
+                        'b' => board.bishops_ref(),
+                        'r' => board.rooks_ref(),
+                        'q' => board.queens_ref(),
+                        'k' => board.kings_ref(),
                         _ => panic!(),
                     };
 
@@ -283,11 +293,11 @@ impl Bitboard {
             "w" => WHITE,
             _ => panic!(),
         };
-        let en_passant = if fen.get_en_passant_target_square() == "-" { NO_SQUARE } else { square_shift_from_fen(fen.get_en_passant_target_square()) };
+        let en_passant_square_shift = if fen.get_en_passant_target_square() == "-" { NO_SQUARE } else { square_shift_from_fen(fen.get_en_passant_target_square()) };
         let fullmove_clock = fen.get_fullmove_clock().parse::<u32>().unwrap();
         let halfmove_clock = fen.get_halfmove_clock().parse::<u32>().unwrap();
 
-        Self { white, black, turn, en_passant_square_shift: en_passant, fullmove_clock, halfmove_clock }
+        Self { white, black, turn, en_passant_square_shift, fullmove_clock, halfmove_clock }
     }
 }
 
@@ -315,21 +325,21 @@ impl Bitboard {
     pub fn generate_pseudo_legal_moves_with_buffer(&self, result: &mut Vec<Move>) {
         let (active, passive) = self.get_active_and_passive();
 
-        let active_occupancy = active.occupancy();
-        let passive_occupancy = passive.occupancy();
+        let active_occupancy = active.full_occupancy();
+        let passive_occupancy = passive.full_occupancy();
         let full_occupancy = active_occupancy | passive_occupancy;
 
-        self.sliding_moves(result, false, active.queens, active_occupancy, full_occupancy, &ROOK_MAGICS, QUEEN);
-        self.sliding_moves(result, false, active.queens, active_occupancy, full_occupancy, &BISHOP_MAGICS, QUEEN);
+        self.sliding_moves(result, false, active.queens(), active_occupancy, full_occupancy, &ROOK_MAGICS, QUEEN);
+        self.sliding_moves(result, false, active.queens(), active_occupancy, full_occupancy, &BISHOP_MAGICS, QUEEN);
 
-        self.sliding_moves(result, false, active.bishops, active_occupancy, full_occupancy, &BISHOP_MAGICS, BISHOP);
-        self.sliding_moves(result, false, active.rooks, active_occupancy, full_occupancy, &ROOK_MAGICS, ROOK);
+        self.sliding_moves(result, false, active.bishops(), active_occupancy, full_occupancy, &BISHOP_MAGICS, BISHOP);
+        self.sliding_moves(result, false, active.rooks(), active_occupancy, full_occupancy, &ROOK_MAGICS, ROOK);
 
-        self.single_moves(result, false, active.knights, active_occupancy, &KNIGHT_NONMAGICS, KNIGHT);
-        self.single_moves(result, false, active.kings, active_occupancy, &KING_NONMAGICS, KING);
+        self.single_moves(result, false, active.knights(), active_occupancy, &KNIGHT_NONMAGICS, KNIGHT);
+        self.single_moves(result, false, active.kings(), active_occupancy, &KING_NONMAGICS, KING);
 
-        self.pawn_attacks(result, active.pawns, active_occupancy, passive_occupancy);
-        self.pawn_moves(result, false, active.pawns, full_occupancy);
+        self.pawn_attacks(result, active.pawns(), active_occupancy, passive_occupancy);
+        self.pawn_moves(result, false, active.pawns(), full_occupancy);
 
         self.castle_moves(result, full_occupancy);
     }
@@ -337,21 +347,21 @@ impl Bitboard {
     pub fn generate_pseudo_legal_non_quiescent_moves_with_buffer(&self, result: &mut Vec<Move>) {
         let (active, passive) = self.get_active_and_passive();
 
-        let active_occupancy = active.occupancy();
-        let passive_occupancy = passive.occupancy();
+        let active_occupancy = active.full_occupancy();
+        let passive_occupancy = passive.full_occupancy();
         let full_occupancy = active_occupancy | passive_occupancy;
 
-        self.sliding_moves(result, true, active.queens, active_occupancy, full_occupancy, &ROOK_MAGICS, QUEEN);
-        self.sliding_moves(result, true, active.queens, active_occupancy, full_occupancy, &BISHOP_MAGICS, QUEEN);
+        self.sliding_moves(result, true, active.queens(), active_occupancy, full_occupancy, &ROOK_MAGICS, QUEEN);
+        self.sliding_moves(result, true, active.queens(), active_occupancy, full_occupancy, &BISHOP_MAGICS, QUEEN);
 
-        self.sliding_moves(result, true, active.bishops, active_occupancy, full_occupancy, &BISHOP_MAGICS, BISHOP);
-        self.sliding_moves(result, true, active.rooks, active_occupancy, full_occupancy, &ROOK_MAGICS, ROOK);
+        self.sliding_moves(result, true, active.bishops(), active_occupancy, full_occupancy, &BISHOP_MAGICS, BISHOP);
+        self.sliding_moves(result, true, active.rooks(), active_occupancy, full_occupancy, &ROOK_MAGICS, ROOK);
 
-        self.single_moves(result, true, active.knights, active_occupancy, &KNIGHT_NONMAGICS, KNIGHT);
-        self.single_moves(result, true, active.kings, active_occupancy, &KING_NONMAGICS, KING);
+        self.single_moves(result, true, active.knights(), active_occupancy, &KNIGHT_NONMAGICS, KNIGHT);
+        self.single_moves(result, true, active.kings(), active_occupancy, &KING_NONMAGICS, KING);
 
-        self.pawn_attacks(result, active.pawns, active_occupancy, passive_occupancy);
-        self.pawn_moves(result, true, active.pawns, full_occupancy);
+        self.pawn_attacks(result, active.pawns(), active_occupancy, passive_occupancy);
+        self.pawn_moves(result, true, active.pawns(), full_occupancy);
     }
 
 
@@ -646,6 +656,7 @@ impl Bitboard {
         mv.set_previous_halfmove(self.halfmove_clock);
         mv.set_previous_en_passant_square(self.en_passant_square_shift);
         mv.set_promotion_piece(promote_to);
+        mv.set_side_to_move(self.turn);
 
         if piece_active == PAWN || piece_attacked != NO_PIECE {
             mv.set_halfmove_reset();
@@ -687,12 +698,89 @@ impl Bitboard {
 
 // Make/Unmake move
 impl Bitboard {
+    pub fn zobrist_xor(mv: Move) -> ZobristHash {
+        let mut result: ZobristHash = 0;
+
+        let self_color = mv.get_side_to_move();
+        let opponent_color = opposite_color(self_color);
+
+        result ^= Zobrist::BLACK_TO_MOVE_HASH;
+
+        if mv.is_self_lost_king_side_castle() {
+            result ^= Zobrist::castle_hash(KING, self_color);
+        }
+
+        if mv.is_self_lost_queen_side_castle() {
+            result ^= Zobrist::castle_hash(QUEEN, self_color);
+        }
+
+        if mv.is_opponent_lost_king_side_castle() {
+            result ^= Zobrist::castle_hash(KING, opponent_color);
+        }
+
+        if mv.is_opponent_lost_queen_side_castle() {
+            result ^= Zobrist::castle_hash(QUEEN, opponent_color);
+        }
+
+        if mv.get_previous_en_passant_square() != NO_SQUARE {
+            result ^= Zobrist::en_passant_square_hash(mv.get_previous_en_passant_square());
+        }
+
+        if mv.get_next_en_passant_square() != NO_SQUARE {
+            result ^= Zobrist::en_passant_square_hash(mv.get_next_en_passant_square());
+        }
+
+        let is_white_turn = self_color == WHITE;
+
+        let piece_moved = mv.get_piece_moved();
+        let piece_promoted = mv.get_promotion_piece();
+        let piece_attacked = mv.get_piece_attacked();
+        let source_square_shift = mv.get_source_square();
+        let target_square_shift = mv.get_target_square();
+
+        if mv.is_castle_move() {
+            let (rook_source_shift, king_source_shift, rook_target_shift, king_target_shift) = match target_square_shift {
+                C1 => (A1, E1, D1, C1),
+                G1 => (H1, E1, F1, G1),
+                C8 => (A8, E8, D8, C8),
+                G8 => (H8, E8, F8, G8),
+                _ => panic!(),
+            };
+
+            result ^= Zobrist::piece_square_hash(ROOK, rook_source_shift, self_color);
+            result ^= Zobrist::piece_square_hash(ROOK, rook_target_shift, self_color);
+            result ^= Zobrist::piece_square_hash(KING, king_source_shift, self_color);
+            result ^= Zobrist::piece_square_hash(KING, king_target_shift, self_color);
+        } else if mv.is_en_passant_attack() {
+            result ^= Zobrist::piece_square_hash(PAWN, source_square_shift, self_color);
+            result ^= Zobrist::piece_square_hash(PAWN, target_square_shift, self_color);
+
+            let pawn_target_shift = if is_white_turn {
+                target_square_shift + 8
+            } else {
+                target_square_shift - 8
+            };
+
+            result ^= Zobrist::piece_square_hash(PAWN, pawn_target_shift, opponent_color);
+        } else if mv.is_promotion() {
+            result ^= Zobrist::piece_square_hash(PAWN, source_square_shift, self_color);
+            result ^= Zobrist::piece_square_hash(piece_promoted, target_square_shift, self_color);
+            result ^= Zobrist::piece_square_hash(piece_attacked, target_square_shift, opponent_color);
+        } else {
+            result ^= Zobrist::piece_square_hash(piece_moved, source_square_shift, self_color);
+            result ^= Zobrist::piece_square_hash(piece_moved, target_square_shift, self_color);
+            result ^= Zobrist::piece_square_hash(piece_attacked, target_square_shift, opponent_color);
+        }
+
+        result
+    }
+
     pub fn make(&mut self, mv: Move) {
         let is_white_turn = self.is_white_turn();
 
         self.fullmove_clock += self.turn;
 
-        if mv.get_halfmove_reset() != 0 {
+        if mv.is_halfmove_reset() {
             self.halfmove_clock = 0;
         } else {
             self.halfmove_clock += 1;
@@ -705,19 +793,19 @@ impl Bitboard {
         // Swap active and passive because turn has already changed
         let (passive, active) = self.get_active_and_passive_mut();
 
-        if mv.get_self_lost_king_side_castle() != 0 {
+        if mv.is_self_lost_king_side_castle() {
             active.king_side_castle = false;
         }
 
-        if mv.get_self_lost_queen_side_castle() != 0 {
+        if mv.is_self_lost_queen_side_castle() {
             active.queen_side_castle = false;
         }
 
-        if mv.get_opponent_lost_king_side_castle() != 0 {
+        if mv.is_opponent_lost_king_side_castle() {
             passive.king_side_castle = false;
         }
 
-        if mv.get_opponent_lost_queen_side_castle() != 0 {
+        if mv.is_opponent_lost_queen_side_castle() {
             passive.queen_side_castle = false;
         }
 
@@ -727,50 +815,35 @@ impl Bitboard {
         let source_square_mask: SquareMaskBits = 1_u64 << source_square_shift;
         let target_square_mask: SquareMaskBits = 1_u64 << target_square_shift;
 
-        if mv.get_castle_move() != 0 {
+        if mv.is_castle_move() {
             match target_square_shift {
-                C1 => Self::make_castle(active, A1_MASK, E1_MASK, D1_MASK, C1_MASK),
-                G1 => Self::make_castle(active, H1_MASK, E1_MASK, F1_MASK, G1_MASK),
-                C8 => Self::make_castle(active, A8_MASK, E8_MASK, D8_MASK, C8_MASK),
-                G8 => Self::make_castle(active, H8_MASK, E8_MASK, F8_MASK, G8_MASK),
-                _ => {}
-            };
-        } else if mv.get_en_passant_attack() != 0 {
-            active.pawns &= !source_square_mask;
-            active.pawns |= target_square_mask;
-
-            if is_white_turn {
-                passive.unset_all(target_square_mask << 8)
-            } else {
-                passive.unset_all(target_square_mask >> 8)
-            }
-        } else {
-            match mv.get_piece_moved() {
-                KING => active.kings = (active.kings & !source_square_mask) | target_square_mask,
-                QUEEN => active.queens = (active.queens & !source_square_mask) | target_square_mask,
-                ROOK => active.rooks = (active.rooks & !source_square_mask) | target_square_mask,
-                BISHOP => active.bishops = (active.bishops & !source_square_mask) | target_square_mask,
-                KNIGHT => active.knights = (active.knights & !source_square_mask) | target_square_mask,
-                PAWN => {
-                    let promote = mv.get_promotion_piece();
-
-                    if promote == NO_PIECE {
-                        active.pawns = (active.pawns & !source_square_mask) | target_square_mask
-                    } else {
-                        active.pawns &= !source_square_mask;
-                        match promote {
-                            QUEEN => active.queens |= target_square_mask,
-                            ROOK => active.rooks |= target_square_mask,
-                            BISHOP => active.bishops |= target_square_mask,
-                            KNIGHT => active.knights |= target_square_mask,
-                            _ => panic!(),
-                        }
-                    }
-                }
+                C1 => Self::make_castle(active, A1_MASK, source_square_mask, D1_MASK, target_square_mask),
+                G1 => Self::make_castle(active, H1_MASK, source_square_mask, F1_MASK, target_square_mask),
+                C8 => Self::make_castle(active, A8_MASK, source_square_mask, D8_MASK, target_square_mask),
+                G8 => Self::make_castle(active, H8_MASK, source_square_mask, F8_MASK, target_square_mask),
                 _ => panic!(),
-            }
+            };
+        } else if mv.is_en_passant_attack() {
+            *active.pawns_ref() &= !source_square_mask;
+            *active.pawns_ref() |= target_square_mask;
 
-            passive.unset_all(target_square_mask);
+            let pawn_target_mask = if is_white_turn {
+                target_square_mask << 8
+            } else {
+                target_square_mask >> 8
+            };
+
+            *passive.pawns_ref() &= !pawn_target_mask;
+        } else if mv.is_promotion() {
+            *active.pawns_ref() &= !source_square_mask;
+            *active.occupancy_ref(mv.get_promotion_piece()) |= target_square_mask;
+            *passive.occupancy_ref(mv.get_piece_attacked()) &= !target_square_mask;
+            // passive.unset_all(target_square_mask);
+        } else {
+            *active.occupancy_ref(mv.get_piece_moved()) &= !source_square_mask;
+            *active.occupancy_ref(mv.get_piece_moved()) |= target_square_mask;
+            *passive.occupancy_ref(mv.get_piece_attacked()) &= !target_square_mask;
+            // passive.unset_all(target_square_mask);
         }
     }
 
@@ -785,19 +858,19 @@ impl Bitboard {
 
         let (active, passive) = self.get_active_and_passive_mut();
 
-        if mv.get_self_lost_king_side_castle() != 0 {
+        if mv.is_self_lost_king_side_castle() {
             active.king_side_castle = true;
         }
 
-        if mv.get_self_lost_queen_side_castle() != 0 {
+        if mv.is_self_lost_queen_side_castle() {
             active.queen_side_castle = true;
         }
 
-        if mv.get_opponent_lost_king_side_castle() != 0 {
+        if mv.is_opponent_lost_king_side_castle() {
             passive.king_side_castle = true;
         }
 
-        if mv.get_opponent_lost_queen_side_castle() != 0 {
+        if mv.is_opponent_lost_queen_side_castle() {
             passive.queen_side_castle = true;
         }
 
@@ -810,16 +883,17 @@ impl Bitboard {
         let piece_moved = mv.get_piece_moved();
         let piece_attacked = mv.get_piece_attacked();
 
-        if mv.get_castle_move() != 0 {
+        if mv.is_castle_move() {
             match target_square_shift {
-                C1 => Self::unmake_castle(active, A1_MASK, E1_MASK, D1_MASK, C1_MASK),
-                G1 => Self::unmake_castle(active, H1_MASK, E1_MASK, F1_MASK, G1_MASK),
-                C8 => Self::unmake_castle(active, A8_MASK, E8_MASK, D8_MASK, C8_MASK),
-                G8 => Self::unmake_castle(active, H8_MASK, E8_MASK, F8_MASK, G8_MASK),
-                _ => {}
+                C1 => Self::unmake_castle(active, A1_MASK, source_square_mask, D1_MASK, target_square_mask),
+                G1 => Self::unmake_castle(active, H1_MASK, source_square_mask, F1_MASK, target_square_mask),
+                C8 => Self::unmake_castle(active, A8_MASK, source_square_mask, D8_MASK, target_square_mask),
+                G8 => Self::unmake_castle(active, H8_MASK, source_square_mask, F8_MASK, target_square_mask),
+                _ => panic!(),
             };
-        } else if mv.get_en_passant_attack() != 0 {
-            active.pawns = (active.pawns & !target_square_mask) | source_square_mask;
+        } else if mv.is_en_passant_attack() {
+            *active.pawns_ref() &= !target_square_mask;
+            *active.pawns_ref() |= source_square_mask;
 
             let en_passant_attack_target_mask = if is_white_turn {
                 target_square_mask >> 8
@@ -827,37 +901,15 @@ impl Bitboard {
                 target_square_mask << 8
             };
 
-            match piece_attacked {
-                KING => passive.kings |= en_passant_attack_target_mask,
-                QUEEN => passive.queens |= en_passant_attack_target_mask,
-                ROOK => passive.rooks |= en_passant_attack_target_mask,
-                BISHOP => passive.bishops |= en_passant_attack_target_mask,
-                KNIGHT => passive.knights |= en_passant_attack_target_mask,
-                PAWN => passive.pawns |= en_passant_attack_target_mask,
-                _ => panic!(),
-            }
+            *passive.occupancy_ref(piece_attacked) |= en_passant_attack_target_mask;
+        } else if mv.is_promotion() {
+            *passive.occupancy_ref(piece_attacked) |= target_square_mask;
+            *active.pawns_ref() |= source_square_mask;
+            *active.occupancy_ref(mv.get_promotion_piece()) &= !target_square_mask;
         } else {
-            match piece_attacked {
-                KING => passive.kings |= target_square_mask,
-                QUEEN => passive.queens |= target_square_mask,
-                ROOK => passive.rooks |= target_square_mask,
-                BISHOP => passive.bishops |= target_square_mask,
-                KNIGHT => passive.knights |= target_square_mask,
-                PAWN => passive.pawns |= target_square_mask,
-                _ => {}
-            }
-
-            match piece_moved {
-                KING => active.kings |= source_square_mask,
-                QUEEN => active.queens |= source_square_mask,
-                ROOK => active.rooks |= source_square_mask,
-                BISHOP => active.bishops |= source_square_mask,
-                KNIGHT => active.knights |= source_square_mask,
-                PAWN => active.pawns |= source_square_mask,
-                _ => {}
-            }
-
-            active.unset_all(target_square_mask);
+            *passive.occupancy_ref(piece_attacked) |= target_square_mask;
+            *active.occupancy_ref(piece_moved) |= source_square_mask;
+            *active.occupancy_ref(piece_moved) &= !target_square_mask;
         }
     }
 
@@ -869,11 +921,11 @@ impl Bitboard {
         rook_target_mask: SquareMaskBits,
         king_target_mask: SquareMaskBits,
     ) {
-        active.rooks &= !rook_source_mask;
-        active.kings &= !king_source_mask;
+        *active.rooks_ref() &= !rook_source_mask;
+        *active.kings_ref() &= !king_source_mask;
 
-        active.rooks |= rook_target_mask;
-        active.kings |= king_target_mask;
+        *active.rooks_ref() |= rook_target_mask;
+        *active.kings_ref() |= king_target_mask;
     }
 
     #[inline(always)]
@@ -915,10 +967,10 @@ impl Bitboard {
             (&self.black, &self.white)
         };
 
-        let full_occupancy = active.occupancy() | passive.occupancy();
+        let full_occupancy = active.full_occupancy() | passive.full_occupancy();
 
         // Assume only one king
-        self._is_square_in_check(color_bits, passive, active.kings.trailing_zeros(), full_occupancy)
+        self._is_square_in_check(color_bits, passive, active.kings().trailing_zeros(), full_occupancy)
     }
 
     fn _is_occupancy_in_check(&self, color_bits: ColorBits, passive: &PlayerState, full_occupancy: OccupancyBits, mut king_occupancy: OccupancyBits) -> bool {
@@ -937,19 +989,19 @@ impl Bitboard {
     fn _is_square_in_check(&self, color_bits: ColorBits, passive: &PlayerState, king_square_shift: u32, full_occupancy: OccupancyBits) -> bool {
         let rook_attacks = ROOK_MAGICS.get_attacks(king_square_shift, full_occupancy);
 
-        if (rook_attacks & (passive.rooks | passive.queens)) != 0 {
+        if (rook_attacks & (passive.rooks() | passive.queens())) != 0 {
             return true;
         }
 
         let bishop_attacks = BISHOP_MAGICS.get_attacks(king_square_shift, full_occupancy);
 
-        if (bishop_attacks & (passive.bishops | passive.queens)) != 0 {
+        if (bishop_attacks & (passive.bishops() | passive.queens())) != 0 {
             return true;
         }
 
         let knight_attacks = KNIGHT_NONMAGICS.get_attacks(king_square_shift);
 
-        if (knight_attacks & passive.knights) != 0 {
+        if (knight_attacks & passive.knights()) != 0 {
             return true;
         }
 
@@ -959,13 +1011,13 @@ impl Bitboard {
             BLACK_PAWN_NONMAGICS.get_attacks(king_square_shift)
         };
 
-        if (pawn_attacks & passive.pawns) != 0 {
+        if (pawn_attacks & passive.pawns()) != 0 {
             return true;
         }
 
         let king_attacks = KING_NONMAGICS.get_attacks(king_square_shift);
 
-        (king_attacks & passive.kings) != 0
+        (king_attacks & passive.kings()) != 0
     }
 }
 
@@ -1012,10 +1064,10 @@ impl Bitboard {
 
     #[inline(always)]
     fn opposite_turn(&self) -> ColorBits {
-        1 - self.turn
+        opposite_color(self.turn)
     }
 
-    pub fn find_move(&mut self, uci: &str) -> Result<Move, MoveFromUciError> {
+    pub fn find_uci(&mut self, uci: &str) -> Result<Move, MoveFromUciError> {
         let uci = uci.trim();
         let result = self.generate_pseudo_legal_moves().into_iter().find(|mv| mv.to_uci_string() == uci).ok_or_else(|| MoveDoesNotExist(uci.to_string()))?;
 
@@ -1029,7 +1081,7 @@ impl Bitboard {
     }
 
     pub fn make_uci(&mut self, uci: &str) -> Result<(), MoveFromUciError> {
-        let mv = self.find_move(uci)?;
+        let mv = self.find_uci(uci)?;
         self.make(mv);
 
         Ok(())
@@ -1039,7 +1091,7 @@ impl Bitboard {
         let mut potential_unmake = Vec::new();
 
         for uci in moves {
-            match self.find_move(uci) {
+            match self.find_uci(uci) {
                 Ok(mv) => {
                     self.make(mv);
                     potential_unmake.push(mv);
@@ -1265,49 +1317,54 @@ impl Bitboard {
         count
     }
 
-    pub fn zobrist_hash(&self) -> u64 {
-        let mut hash =
-            Self::zobrist_hash_for_occupancy(self.white.kings, KING, WHITE)
-                ^ Self::zobrist_hash_for_occupancy(self.white.queens, QUEEN, WHITE)
-                ^ Self::zobrist_hash_for_occupancy(self.white.rooks, ROOK, WHITE)
-                ^ Self::zobrist_hash_for_occupancy(self.white.bishops, BISHOP, WHITE)
-                ^ Self::zobrist_hash_for_occupancy(self.white.knights, KNIGHT, WHITE)
-                ^ Self::zobrist_hash_for_occupancy(self.white.pawns, PAWN, WHITE)
-                ^ Self::zobrist_hash_for_occupancy(self.black.kings, KING, BLACK)
-                ^ Self::zobrist_hash_for_occupancy(self.black.queens, QUEEN, BLACK)
-                ^ Self::zobrist_hash_for_occupancy(self.black.rooks, ROOK, BLACK)
-                ^ Self::zobrist_hash_for_occupancy(self.black.bishops, BISHOP, BLACK)
-                ^ Self::zobrist_hash_for_occupancy(self.black.knights, KNIGHT, BLACK)
-                ^ Self::zobrist_hash_for_occupancy(self.black.pawns, PAWN, BLACK);
+    pub fn calculate_zobrist_hash(&self) -> ZobristHash {
+        Self::_zobrist_hash(&self.white, &self.black, self.turn, self.en_passant_square_shift)
+    }
 
-        if !self.is_white_turn() {
+    fn _zobrist_hash(white: &PlayerState, black: &PlayerState, turn: ColorBits, en_passant_square_shift: SquareShiftBits) -> ZobristHash {
+        let mut hash =
+            Self::zobrist_hash_for_occupancy(white.kings(), KING, WHITE)
+                ^ Self::zobrist_hash_for_occupancy(white.queens(), QUEEN, WHITE)
+                ^ Self::zobrist_hash_for_occupancy(white.rooks(), ROOK, WHITE)
+                ^ Self::zobrist_hash_for_occupancy(white.bishops(), BISHOP, WHITE)
+                ^ Self::zobrist_hash_for_occupancy(white.knights(), KNIGHT, WHITE)
+                ^ Self::zobrist_hash_for_occupancy(white.pawns(), PAWN, WHITE)
+                ^ Self::zobrist_hash_for_occupancy(black.kings(), KING, BLACK)
+                ^ Self::zobrist_hash_for_occupancy(black.queens(), QUEEN, BLACK)
+                ^ Self::zobrist_hash_for_occupancy(black.rooks(), ROOK, BLACK)
+                ^ Self::zobrist_hash_for_occupancy(black.bishops(), BISHOP, BLACK)
+                ^ Self::zobrist_hash_for_occupancy(black.knights(), KNIGHT, BLACK)
+                ^ Self::zobrist_hash_for_occupancy(black.pawns(), PAWN, BLACK)
+            ;
+
+        if turn == BLACK {
             hash ^= Zobrist::BLACK_TO_MOVE_HASH;
         }
 
-        if self.en_passant_square_shift != NO_SQUARE {
-            hash ^= Zobrist::en_passant_square_hash(self.en_passant_square_shift);
+        if en_passant_square_shift != NO_SQUARE {
+            hash ^= Zobrist::en_passant_square_hash(en_passant_square_shift);
         }
 
-        if self.white.queen_side_castle {
+        if white.queen_side_castle {
             hash ^= Zobrist::WHITE_QUEEN_CASTLE_HASH;
         }
 
-        if self.white.king_side_castle {
+        if white.king_side_castle {
             hash ^= Zobrist::WHITE_KING_CASTLE_HASH;
         }
 
-        if self.black.queen_side_castle {
+        if black.queen_side_castle {
             hash ^= Zobrist::BLACK_QUEEN_CASTLE_HASH;
         }
 
-        if self.black.king_side_castle {
+        if black.king_side_castle {
             hash ^= Zobrist::BLACK_KING_CASTLE_HASH;
         }
 
         hash
     }
 
-    fn zobrist_hash_for_occupancy(mut occupancy: OccupancyBits, piece: PieceBits, color: ColorBits) -> u64 {
+    fn zobrist_hash_for_occupancy(mut occupancy: OccupancyBits, piece: PieceBits, color: ColorBits) -> ZobristHash {
         let mut result = 0;
 
         while occupancy != 0 {
@@ -1329,15 +1386,15 @@ impl Display for Move {
             self.to_uci_string(),
             piece_to_string(self.get_piece_moved()),
             piece_to_string(self.get_piece_attacked()),
-            self.get_self_lost_king_side_castle() != 0,
-            self.get_self_lost_queen_side_castle() != 0,
-            self.get_opponent_lost_king_side_castle() != 0,
-            self.get_opponent_lost_queen_side_castle() != 0,
-            self.get_castle_move() != 0,
-            self.get_en_passant_attack() != 0,
+            self.is_self_lost_king_side_castle(),
+            self.is_self_lost_queen_side_castle(),
+            self.is_opponent_lost_king_side_castle(),
+            self.is_opponent_lost_queen_side_castle(),
+            self.is_castle_move(),
+            self.is_en_passant_attack(),
             square_to_string(self.get_source_square()),
             square_to_string(self.get_target_square()),
-            self.get_halfmove_reset() != 0,
+            self.is_halfmove_reset(),
             self.get_previous_halfmove(),
             square_to_string(self.get_previous_en_passant_square()),
             square_to_string(self.get_next_en_passant_square()),
@@ -1404,9 +1461,56 @@ impl Display for Bitboard {
 
 #[cfg(test)]
 mod tests {
+    use rand::prelude::{SliceRandom, StdRng};
+    use rand::SeedableRng;
+
     use marvk_chess_core::fen::Fen;
 
     use crate::board::Bitboard;
+
+    #[test]
+    fn test_zobrist_consistency() {
+        let mut rng = StdRng::seed_from_u64(0);
+
+        for _ in 0..1000 {
+            let mut board = Bitboard::default();
+            let mut zobrist_hash = board.calculate_zobrist_hash();
+
+            for i in 1..200 {
+                let mut moves = board.generate_legal_moves();
+
+                for mv in &moves {
+                    board.make(*mv);
+                    let xor = Bitboard::zobrist_xor(*mv);
+                    zobrist_hash ^= xor;
+                    assert_eq!(zobrist_hash, board.calculate_zobrist_hash());
+                    board.unmake(*mv);
+                    zobrist_hash ^= xor;
+
+                    assert_eq!(zobrist_hash, board.calculate_zobrist_hash());
+                }
+
+                moves.shuffle(&mut rng);
+
+                if let Some(mv) = moves.first() {
+                    let fen = board.fen().fen;
+                    board.make(*mv);
+                    let xor = Bitboard::zobrist_xor(*mv);
+                    zobrist_hash ^= xor;
+
+                    assert_eq!(zobrist_hash, board.calculate_zobrist_hash(), "failed after move #{}: {:?} --- fen: {}", i, mv, fen);
+                } else {
+                    break;
+                }
+            }
+        }
+    }
+
+
+    #[test]
+    fn test_zobrist_consistency_make_unmake() {
+        for _ in 0..1 {}
+    }
 
     #[test]
     fn test_ply_clock() {
@@ -1528,7 +1632,7 @@ mod tests {
         let fen_in_check = Fen::new("Q7/8/8/k1K5/8/8/8/8 b - - 2 1").unwrap();
         let board = Bitboard::new(&fen_in_check);
 
-        assert_eq!(board.is_current_in_check(), true)
+        assert!(board.is_current_in_check())
     }
 
     #[test]
@@ -1536,7 +1640,7 @@ mod tests {
         let fen_in_check = Fen::new("q7/8/8/K1k5/8/8/8/8 w - - 1 1").unwrap();
         let board = Bitboard::new(&fen_in_check);
 
-        assert_eq!(board.is_current_in_check(), true)
+        assert!(board.is_current_in_check())
     }
 
     #[test]
@@ -1544,7 +1648,7 @@ mod tests {
         let fen_in_check = Fen::new("1Q6/8/8/k1K5/8/8/8/8 b - - 2 1").unwrap();
         let board = Bitboard::new(&fen_in_check);
 
-        assert_eq!(board.is_current_in_check(), false)
+        assert!(!board.is_current_in_check())
     }
 
     #[test]
@@ -1552,7 +1656,7 @@ mod tests {
         let fen_in_check = Fen::new("1q6/8/8/K1k5/8/8/8/8 w - - 1 1").unwrap();
         let board = Bitboard::new(&fen_in_check);
 
-        assert_eq!(board.is_current_in_check(), false)
+        assert!(!board.is_current_in_check())
     }
 }
 

@@ -7,7 +7,7 @@ use std::thread::JoinHandle;
 use std::time::{Duration, SystemTime};
 
 use marvk_chess_board::board::{Bitboard, Move};
-use marvk_chess_board::board::constants::{ColorBits, WHITE};
+use marvk_chess_board::board::constants::{ColorBits, WHITE, ZobristHash};
 use marvk_chess_core::fen::Fen;
 use marvk_chess_uci::uci::{Engine, Go, Info, ProtectionMessage, Score, UciCommand, UciMove, UciTx};
 use SearchMessage::{UciGo, UciPositionFrom, UciUciNewGame};
@@ -150,15 +150,15 @@ impl<T: UciTx, H: Heuristic, M: MoveOrder> Search<T, H, M> {
     fn set_position_from(&mut self, fen: Fen, moves: Vec<UciMove>) {
         let mut board = Bitboard::new(&fen);
         let mut zobrist_history = ZobristHistory::default();
-        zobrist_history.set(board.ply_clock(), board.zobrist_hash());
+        zobrist_history.set(board.ply_clock(), board.calculate_zobrist_hash());
 
         let mut bb_moves = Vec::new();
 
         for uci in moves {
-            match board.find_move(&uci.to_string()) {
+            match board.find_uci(&uci.to_string()) {
                 Ok(mv) => {
                     board.make(mv);
-                    zobrist_history.set(board.ply_clock(), board.zobrist_hash());
+                    zobrist_history.set(board.ply_clock(), board.calculate_zobrist_hash());
                     bb_moves.push(mv);
                 }
                 Err(error) => {
@@ -324,7 +324,15 @@ impl<T: UciTx, H: Heuristic, M: MoveOrder> Search<T, H, M> {
         let mut score = None;
 
         for depth in 1..=max_depth {
-            let current_best_move = self.negamax(&mut self.create_buffer(), depth, depth, self.heuristic.loss_score(), self.heuristic.win_score(), self.state.principal_variation.is_some());
+            let current_best_move = self.negamax(
+                &mut self.create_buffer(),
+                depth,
+                depth,
+                self.heuristic.loss_score(),
+                self.heuristic.win_score(),
+                self.state.principal_variation.is_some(),
+                self.state.bitboard.calculate_zobrist_hash(),
+            );
 
             let elapsed = self.state.elapsed();
             let max_thinking_time = self.params.go.move_time.unwrap_or(Duration::MAX);
@@ -389,7 +397,8 @@ impl<T: UciTx, H: Heuristic, M: MoveOrder> Search<T, H, M> {
         heuristic_factor(color) * self.heuristic.evaluate(&self.state.bitboard, legal_moves_remaining)
     }
 
-    fn negamax(&mut self, buffer: &mut Vec<Move>, depth: usize, ply: usize, alpha_original: i32, beta_original: i32, pv: bool) -> ValuedMove {
+    #[allow(clippy::too_many_arguments)]
+    fn negamax(&mut self, buffer: &mut Vec<Move>, depth: usize, ply: usize, alpha_original: i32, beta_original: i32, pv: bool, zobrist: ZobristHash) -> ValuedMove {
         let color = self.board().turn;
 
         let check_flags = self.should_check_flags();
@@ -410,13 +419,13 @@ impl<T: UciTx, H: Heuristic, M: MoveOrder> Search<T, H, M> {
 
         self.state.metrics.increment_negamax_nodes();
 
-        let zobrist = self.state.bitboard.zobrist_hash();
         let ply_clock = self.board().ply_clock();
         let halfmove_clock = self.board().halfmove_clock;
         self.state.zobrist_history.set(ply_clock, zobrist);
-        if self.state.zobrist_history.is_threefold_repetition(ply_clock, halfmove_clock) {
+        if self.state.zobrist_history.count_repetitions(ply_clock, halfmove_clock) >= 2 {
             let contempt_factor_factor = if (ply - depth) % 2 == 0 { 1 } else { -1 };
 
+            // todo if depth == ply, null move
             return ValuedMove::leaf(self.heuristic.draw_score() + contempt_factor_factor * self.options.contempt_factor);
         }
 
@@ -448,7 +457,6 @@ impl<T: UciTx, H: Heuristic, M: MoveOrder> Search<T, H, M> {
             self.filter_search_moves(buffer);
 
             if buffer.is_empty() {
-                dbg!("empty");
                 return ValuedMove::leaf(0);
             }
         }
@@ -482,9 +490,11 @@ impl<T: UciTx, H: Heuristic, M: MoveOrder> Search<T, H, M> {
                 continue;
             }
 
+            let zobrist_xor = Bitboard::zobrist_xor(*mv);
+
             legal_moves_encountered = true;
 
-            let child = self.negamax(&mut next_buffer, depth - 1, ply, -beta, -alpha, pv_move.map(|pv_mv| pv_mv.bits == mv.bits).unwrap_or(false));
+            let child = self.negamax(&mut next_buffer, depth - 1, ply, -beta, -alpha, pv_move.map(|pv_mv| pv_mv.bits == mv.bits).unwrap_or(false), zobrist ^ zobrist_xor);
 
             if self.flags.stop_as_soon_as_possible {
                 return ValuedMove::new(0, None, None);
@@ -661,7 +671,6 @@ pub enum SearchMessage {
 struct EngineOptions {
     debug: bool,
     try_previous_pv: bool,
-    default_ply: usize,
     contempt_factor: i32,
 }
 
@@ -670,7 +679,6 @@ impl Default for EngineOptions {
         Self {
             debug: false,
             try_previous_pv: true,
-            default_ply: 7,
             contempt_factor: -99999,
         }
     }

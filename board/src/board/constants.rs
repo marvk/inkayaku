@@ -9,6 +9,7 @@ pub type PieceBits = u64;
 pub type MaskBits = u64;
 pub type ShiftBits = u32;
 pub type OccupancyBits = u64;
+pub type ZobristHash = u64;
 pub type GameStageBits = usize;
 
 pub const WHITE: ColorBits = 0;
@@ -16,38 +17,41 @@ pub const BLACK: ColorBits = 1;
 
 // MSB . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . LSB
 //
-// xxxxxxxxxxxx xxx xxxxxx xxxxxx xxxxxxxxxxxx x xxxxxx xxxxxx x x x x x x xxx xxx
-// ___UNUSED___  |     |       |         |     |   |      |   | | | | | |  |   |
-//               |     |       |         |     |   |      |   | | | | | |  |   |
-//               |     |       |         |     |   |      |   | | | | | |  |    --> Piece moved
-//               |     |       |         |     |   |      |   | | | | | |  |
-//               |     |       |         |     |   |      |   | | | | | |   ------> Piece attacked
-//               |     |       |         |     |   |      |   | | | | | |
-//               |     |       |         |     |   |      |   | | | | |  ---------> Self lost king side castle
-//               |     |       |         |     |   |      |   | | | | |
-//               |     |       |         |     |   |      |   | | | |  -----------> Self lost queen side castle
-//               |     |       |         |     |   |      |   | | | |
-//               |     |       |         |     |   |      |   | | |  -------------> Opponent lost king side castle
-//               |     |       |         |     |   |      |   | | |
-//               |     |       |         |     |   |      |   | |  ---------------> Opponent lost queen side castle
-//               |     |       |         |     |   |      |   | |
-//               |     |       |         |     |   |      |   |  -----------------> Is castle move
-//               |     |       |         |     |   |      |   |
-//               |     |       |         |     |   |      |    -------------------> Is en passant attack
-//               |     |       |         |     |   |      |
-//               |     |       |         |     |   |       -----------------------> Source square
-//               |     |       |         |     |   |
-//               |     |       |         |     |    ------------------------------> Target square
-//               |     |       |         |     |
-//               |     |       |         |      ------------------------------------> Halfmove reset
-//               |     |       |         |
-//               |     |       |          ------------------------------------------> Previous halfmove
-//               |     |       |
-//               |     |        ----------------------------------------------------> Previous en passant square } Technically you can use files
-//               |     |
-//               |      ------------------------------------------------------------> Next en passant square     } and get that information from the pawn move
-//               |
-//                ------------------------------------------------------------------> Promotion Piece
+// xxxxxxxxxxx x xxx xxxxxx xxxxxx xxxxxxxxxxxx x xxxxxx xxxxxx x x x x x x xxx xxx
+// UNUSED      |  |     |       |         |     |    |      |   | | | | | |  |   |
+//             |  |     |       |         |     |    |      |   | | | | | |  |   |
+//             |  |     |       |         |     |    |      |   | | | | | |  |    --> Piece moved
+//             |  |     |       |         |     |    |      |   | | | | | |  |
+//             |  |     |       |         |     |    |      |   | | | | | |   ------> Piece attacked
+//             |  |     |       |         |     |    |      |   | | | | | |
+//             |  |     |       |         |     |    |      |   | | | | |  ---------> Self lost king side castle
+//             |  |     |       |         |     |    |      |   | | | | |
+//             |  |     |       |         |     |    |      |   | | | |  -----------> Self lost queen side castle
+//             |  |     |       |         |     |    |      |   | | | |
+//             |  |     |       |         |     |    |      |   | | |  -------------> Opponent lost king side castle
+//             |  |     |       |         |     |    |      |   | | |
+//             |  |     |       |         |     |    |      |   | |  ---------------> Opponent lost queen side castle
+//             |  |     |       |         |     |    |      |   | |
+//             |  |     |       |         |     |    |      |   |  -----------------> Is castle move
+//             |  |     |       |         |     |    |      |   |
+//             |  |     |       |         |     |    |      |    -------------------> Is en passant attack
+//             |  |     |       |         |     |    |      |
+//             |  |     |       |         |     |    |       -----------------------> Source square
+//             |  |     |       |         |     |    |
+//             |  |     |       |         |     |     ------------------------------> Target square
+//             |  |     |       |         |     |
+//             |  |     |       |         |      ------------------------------------> Halfmove reset
+//             |  |     |       |         |
+//             |  |     |       |          ------------------------------------------> Previous halfmove
+//             |  |     |       |
+//             |  |     |        ----------------------------------------------------> Previous en passant square } Technically you can use files
+//             |  |     |
+//             |  |      ------------------------------------------------------------> Next en passant square     } and get that information from the pawn move
+//             |  |
+//             |   ------------------------------------------------------------------> Promotion Piece
+//             |
+//              ---------------------------------------------------------------------> Side to move
+
 
 pub const EARLY: GameStageBits = 0;
 pub const MID: GameStageBits = 1;
@@ -76,6 +80,7 @@ pub const PREVIOUS_HALFMOVE_MASK: MaskBits = 0b111111111111000000000000000000000
 pub const PREVIOUS_EN_PASSANT_SQUARE_MASK: MaskBits = 0b1111110000000000000000000000000000000000000;
 pub const NEXT_EN_PASSANT_SQUARE_MASK: MaskBits = 0b1111110000000000000000000000000000000000000000000;
 pub const PROMOTION_PIECE_MASK: MaskBits = 0b1110000000000000000000000000000000000000000000000000;
+pub const SIDE_TO_MOVE_MASK: MaskBits = 0b10000000000000000000000000000000000000000000000000000;
 
 pub const PIECE_MOVED_SHIFT: ShiftBits = PIECE_MOVED_MASK.trailing_zeros();
 pub const PIECE_ATTACKED_SHIFT: ShiftBits = PIECE_ATTACKED_MASK.trailing_zeros();
@@ -92,7 +97,9 @@ pub const PREVIOUS_HALFMOVE_SHIFT: ShiftBits = PREVIOUS_HALFMOVE_MASK.trailing_z
 pub const PREVIOUS_EN_PASSANT_SQUARE_SHIFT: ShiftBits = PREVIOUS_EN_PASSANT_SQUARE_MASK.trailing_zeros();
 pub const NEXT_EN_PASSANT_SQUARE_SHIFT: ShiftBits = NEXT_EN_PASSANT_SQUARE_MASK.trailing_zeros();
 pub const PROMOTION_PIECE_SHIFT: ShiftBits = PROMOTION_PIECE_MASK.trailing_zeros();
+pub const SIDE_TO_MOVE_SHIFT: ShiftBits = SIDE_TO_MOVE_MASK.trailing_zeros();
 
+// todo hmm this could lead to problems
 pub const NO_SQUARE: SquareShiftBits = 0;
 pub const A8: SquareShiftBits = 0;
 pub const B8: SquareShiftBits = 1;

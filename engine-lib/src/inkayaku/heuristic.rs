@@ -169,19 +169,19 @@ impl SimpleHeuristic {
     }
 
     fn piece_value(state: &PlayerState) -> i32 {
-        (state.queens.count_ones() * Self::QUEEN_VALUE +
-            state.rooks.count_ones() * Self::ROOK_VALUE +
-            state.bishops.count_ones() * Self::BISHOP_VALUE +
-            state.knights.count_ones() * Self::KNIGHT_VALUE +
-            state.pawns.count_ones() * Self::PAWN_VALUE) as i32
+        (state.queens().count_ones() * Self::QUEEN_VALUE +
+            state.rooks().count_ones() * Self::ROOK_VALUE +
+            state.bishops().count_ones() * Self::BISHOP_VALUE +
+            state.knights().count_ones() * Self::KNIGHT_VALUE +
+            state.pawns().count_ones() * Self::PAWN_VALUE) as i32
     }
 
     fn game_stage(&self, board: &Bitboard) -> GameStageBits {
-        let white_has_queens = board.white.queens != 0;
-        let black_has_queens = board.black.queens != 0;
+        let white_has_queens = board.white.queens() != 0;
+        let black_has_queens = board.black.queens() != 0;
 
-        let white_has_one_or_fewer_minor_pieces = (board.white.knights | board.white.bishops).count_ones() <= 1;
-        let black_has_one_or_fewer_minor_pieces = (board.black.knights | board.black.bishops).count_ones() <= 1;
+        let white_has_one_or_fewer_minor_pieces = (board.white.knights() | board.white.bishops()).count_ones() <= 1;
+        let black_has_one_or_fewer_minor_pieces = (board.black.knights() | board.black.bishops()).count_ones() <= 1;
 
         let white_has_queens_but_one_or_fewer_minor_pieces = white_has_queens && white_has_one_or_fewer_minor_pieces;
         let black_has_queens_but_one_or_fewer_minor_pieces = black_has_queens && black_has_one_or_fewer_minor_pieces;
@@ -206,12 +206,12 @@ impl SimpleHeuristic {
     }
 
     fn piece_square_sum_for_player(&self, player: &PlayerState, tables: &[[i32; 64]; 6]) -> i32 {
-        self.piece_square_sum(player.pawns, &tables[PAWN as usize - 1])
-            + self.piece_square_sum(player.knights, &tables[KNIGHT as usize - 1])
-            + self.piece_square_sum(player.bishops, &tables[BISHOP as usize - 1])
-            + self.piece_square_sum(player.rooks, &tables[ROOK as usize - 1])
-            + self.piece_square_sum(player.queens, &tables[QUEEN as usize - 1])
-            + self.piece_square_sum(player.kings, &tables[KING as usize - 1])
+        self.piece_square_sum(player.pawns(), &tables[PAWN as usize - 1])
+            + self.piece_square_sum(player.knights(), &tables[KNIGHT as usize - 1])
+            + self.piece_square_sum(player.bishops(), &tables[BISHOP as usize - 1])
+            + self.piece_square_sum(player.rooks(), &tables[ROOK as usize - 1])
+            + self.piece_square_sum(player.queens(), &tables[QUEEN as usize - 1])
+            + self.piece_square_sum(player.kings(), &tables[KING as usize - 1])
     }
 
     fn piece_square_sum(&self, mut occupancy: OccupancyBits, values: &[i32; 64]) -> i32 {

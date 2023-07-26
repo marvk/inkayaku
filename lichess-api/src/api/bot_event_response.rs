@@ -10,7 +10,7 @@ use crate::api::response::{Color, ColorChoice, GameStatusKey, PerfKey, SpeedKey,
 pub enum BotEvent {
     GameStart { game: GameEventInfo },
     GameFinish { game: GameEventInfo },
-    // Compat isn't being sent when the message arrived in the lila queue before thestream is started
+    // Compat isn't being sent when the message arrived in the lila queue before the stream is started
     Challenge { challenge: ChallengeEventInfo, compat: Option<Compat> },
     ChallengeDeclined { challenge: ChallengeEventInfo },
     ChallengeCanceled { challenge: ChallengeEventInfo },

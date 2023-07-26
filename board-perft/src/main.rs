@@ -189,7 +189,7 @@ pub mod perft {
         let nodes: u64 = expect.iter().map(|e| e.nodes).sum();
 
         assert_eq!(actual, expect, "Failed for {}", fen_string);
-        let nps = (nodes / start.elapsed().unwrap().as_secs()) as f64 / 1000000.0;
+        let nps = nodes as f64 / start.elapsed().unwrap().as_micros() as f64;
         println!("{:?} - {:.1} MM NPS", start.elapsed(), nps);
     }
 

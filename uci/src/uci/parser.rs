@@ -254,7 +254,7 @@ mod tests {
     use crate::uci::{ParseUciMoveError, UciCommand, UciMove};
     use crate::uci::Go;
     use crate::uci::parser::CommandParser;
-    use crate::uci::parser::ParserError::{InvalidFen, InvalidInt, InvalidUciMove, UnexpectedEndOfCommand, UnexpectedToken, UnknownCommand};
+    use crate::uci::parser::ParserError::{InvalidFen, InvalidUciMove, UnexpectedEndOfCommand, UnexpectedToken, UnknownCommand};
     use crate::uci::ParseUciMoveError::InvalidFormat;
     use crate::uci::UciCommand::{Go as GoCommand, IsReady, PonderHit, PositionFrom, Quit, Register, RegisterLater, SetDebug, SetOption, SetOptionValue, Stop, Uci, UciNewGame};
 
