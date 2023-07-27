@@ -14,12 +14,12 @@ use crate::inkayaku::search::{EngineOptions, Search, SearchMessage};
 use crate::inkayaku::search::SearchMessage::{UciDebug, UciPonderHit, UciQuit, UciStop};
 
 mod heuristic;
-mod transposition_table;
 mod move_order;
 mod zobrist_history;
 mod buffer;
 mod metrics;
 mod search;
+mod table;
 
 pub struct Inkayaku<T: UciTx + Send + Sync + 'static> {
     uci_tx: Arc<T>,

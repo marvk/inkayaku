@@ -1,7 +1,9 @@
 use std::collections::{HashMap, LinkedList};
 
 use marvk_chess_board::board::constants::ZobristHash;
+
 use crate::inkayaku::search::ValuedMove;
+use crate::inkayaku::table::HashTable;
 
 pub enum NodeType {
     Exact,
@@ -59,7 +61,7 @@ impl<const N: usize> TranspositionTable for ArrayTranspositionTable<N> {
         let hash = Self::array_hash(zobrist_hash);
         let option = &mut self.entries[hash];
         if option.is_none() {
-            self.load+=1;
+            self.load += 1;
         }
         *option = Some(entry);
     }
@@ -87,43 +89,34 @@ impl<const N: usize> TranspositionTable for ArrayTranspositionTable<N> {
 }
 
 pub struct HashMapTranspositionTable {
-    capacity: usize,
-    entry_list: LinkedList<u64>,
-    entry_map: HashMap<u64, TtEntry>,
+    hash_table: HashTable<ZobristHash, TtEntry>,
 }
 
 impl HashMapTranspositionTable {
     pub fn new(capacity: usize) -> Self {
-        Self { capacity, entry_list: LinkedList::new(), entry_map: HashMap::with_capacity(capacity) }
+        Self { hash_table: HashTable::new(capacity) }
     }
 }
 
 impl TranspositionTable for HashMapTranspositionTable {
     fn clear(&mut self) {
-        self.entry_list.clear();
-        self.entry_map.clear();
+        self.hash_table.clear();
     }
 
     fn put(&mut self, zobrist_hash: ZobristHash, entry: TtEntry) {
-        if self.entry_map.insert(zobrist_hash, entry).is_none() {
-            self.entry_list.push_back(zobrist_hash);
-        }
-        if self.entry_map.len() > self.capacity {
-            let remove_key = self.entry_list.pop_front().unwrap();
-            self.entry_map.remove(&remove_key);
-        }
+        self.hash_table.put(zobrist_hash, entry);
     }
 
     fn get(&self, zobrist_hash: ZobristHash) -> Option<&TtEntry> {
-        self.entry_map.get(&zobrist_hash)
+        self.hash_table.get(zobrist_hash)
     }
 
     fn len(&self) -> usize {
-        self.entry_map.len()
+        self.hash_table.len()
     }
 
     fn load_factor(&self) -> f32 {
-        self.len() as f32 / self.capacity as f32
+        self.hash_table.load_factor()
     }
 }
 

@@ -23,7 +23,6 @@ impl MvvLvaMoveOrder {
 
 impl MoveOrder for MvvLvaMoveOrder {
     fn sort(&self, moves: &mut Vec<Move>, pv_move: Option<Move>, tt_move: Option<Move>) {
-        // moves.shuffle(&mut thread_rng());
         moves.sort_by_key(|mv| Reverse(Self::eval(mv) + Self::move_bonus(mv, pv_move, 900_000) + Self::move_bonus(mv, tt_move, 800_000)));
     }
 }

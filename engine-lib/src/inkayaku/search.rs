@@ -11,8 +11,8 @@ use SearchMessage::{UciDebug, UciGo, UciPonderHit, UciPositionFrom, UciQuit, Uci
 use crate::inkayaku::heuristic::Heuristic;
 use crate::inkayaku::metrics::{Metrics, MetricsService};
 use crate::inkayaku::move_order::MoveOrder;
-use crate::inkayaku::transposition_table::NodeType::{Exact, Lowerbound, Upperbound};
-use crate::inkayaku::transposition_table::{HashMapTranspositionTable, TranspositionTable, TtEntry};
+use crate::inkayaku::table::transposition::NodeType::{Exact, Lowerbound, Upperbound};
+use crate::inkayaku::table::transposition::{HashMapTranspositionTable, TranspositionTable, TtEntry};
 use crate::inkayaku::zobrist_history::ZobristHistory;
 use crate::move_into_uci_move;
 
