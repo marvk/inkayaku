@@ -17,7 +17,7 @@ use UciCommand::Go as GoCommand;
 use crate::inkayaku::heuristic::{Heuristic, SimpleHeuristic};
 use crate::inkayaku::move_order::{MoveOrder, MvvLvaMoveOrder};
 use crate::inkayaku::SearchMessage::{UciDebug, UciPonderHit, UciQuit, UciStop};
-use crate::inkayaku::transposition_table::{TranspositionTable, TtEntry};
+use crate::inkayaku::transposition_table::{ArrayTranspositionTable, HashMapTranspositionTable, TranspositionTable, TtEntry};
 use crate::inkayaku::transposition_table::NodeType::{Exact, Lowerbound, Upperbound};
 use crate::inkayaku::zobrist_history::ZobristHistory;
 use crate::move_into_uci_move;
@@ -548,7 +548,7 @@ impl<T: UciTx, H: Heuristic, M: MoveOrder> Search<T, H, M> {
                 Exact
             };
 
-            self.state.transposition_table.put(zobrist, TtEntry::new(result.clone(), remaining_draft, best_value, node_type));
+            self.state.transposition_table.put(zobrist, TtEntry::new(result.clone(), zobrist, remaining_draft, best_value, node_type));
         }
 
         // TODO transposition table
@@ -701,7 +701,7 @@ impl Default for EngineOptions {
 /// State during search
 struct SearchState {
     bitboard: Bitboard,
-    transposition_table: TranspositionTable,
+    transposition_table: HashMapTranspositionTable,
     principal_variation: Option<Vec<Move>>,
     zobrist_history: ZobristHistory,
     started_at: SystemTime,
@@ -723,7 +723,7 @@ impl Default for SearchState {
     fn default() -> Self {
         Self {
             bitboard: Bitboard::default(),
-            transposition_table: TranspositionTable::new(10_000_000),
+            transposition_table: HashMapTranspositionTable::new(10_000_000),
             principal_variation: None,
             zobrist_history: ZobristHistory::default(),
             started_at: SystemTime::UNIX_EPOCH,
