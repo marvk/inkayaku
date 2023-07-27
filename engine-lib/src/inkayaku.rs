@@ -330,7 +330,7 @@ impl<T: UciTx, H: Heuristic, M: MoveOrder> Search<T, H, M> {
         for depth in 1..=max_depth {
             let current_best_move = self.negamax(
                 &mut self.create_buffer(),
-                depth,
+                0,
                 depth,
                 self.heuristic.loss_score(),
                 self.heuristic.win_score(),
@@ -405,7 +405,7 @@ impl<T: UciTx, H: Heuristic, M: MoveOrder> Search<T, H, M> {
     }
 
     #[allow(clippy::too_many_arguments)]
-    fn negamax(&mut self, buffer: &mut Vec<Move>, depth: usize, ply: usize, alpha_original: i32, beta_original: i32, pv: bool, zobrist: ZobristHash) -> ValuedMove {
+    fn negamax(&mut self, buffer: &mut Vec<Move>, ply_depth_from_root: usize, max_ply: usize, alpha_original: i32, beta_original: i32, is_pv: bool, zobrist: ZobristHash) -> ValuedMove {
         let color = self.board().turn;
 
         let check_flags = self.should_check_flags();
@@ -431,7 +431,7 @@ impl<T: UciTx, H: Heuristic, M: MoveOrder> Search<T, H, M> {
         self.state.zobrist_history.set(ply_clock, zobrist);
 
         if self.state.zobrist_history.count_repetitions(ply_clock, halfmove_clock as u16) >= 3 {
-            let contempt_factor_factor = if (ply - depth) % 2 == 0 { 1 } else { -1 };
+            let contempt_factor_factor = if ply_depth_from_root % 2 == 0 { 1 } else { -1 };
 
             // todo if depth == ply, null move
             return ValuedMove::leaf(self.heuristic.draw_score() + contempt_factor_factor * self.options.contempt_factor);
@@ -444,8 +444,10 @@ impl<T: UciTx, H: Heuristic, M: MoveOrder> Search<T, H, M> {
 
         let mut tt_move = None;
 
+        let remaining_draft = max_ply - ply_depth_from_root;
+
         if let Some(tt_entry) = maybe_tt_entry {
-            if tt_entry.depth >= depth {
+            if tt_entry.depth >= remaining_draft {
                 self.state.metrics.increment_transposition_hits();
                 match tt_entry.node_type {
                     Lowerbound => alpha = max(alpha, tt_entry.value),
@@ -457,15 +459,15 @@ impl<T: UciTx, H: Heuristic, M: MoveOrder> Search<T, H, M> {
                 if alpha >= beta {
                     return tt_entry.mv.clone();
                 }
-
-                tt_move = tt_entry.mv.mv;
             }
+            tt_move = tt_entry.mv.mv;
         };
 
         buffer.clear();
         self.board().generate_pseudo_legal_moves_with_buffer(buffer);
 
-        if ply == depth {
+        let is_root = ply_depth_from_root == 0;
+        if is_root {
             self.filter_search_moves(buffer);
 
             if buffer.is_empty() {
@@ -473,7 +475,8 @@ impl<T: UciTx, H: Heuristic, M: MoveOrder> Search<T, H, M> {
             }
         }
 
-        if depth == 0 {
+        let is_max_ply = ply_depth_from_root == max_ply;
+        if is_max_ply {
             let legal_moves_remaining = self.board().is_any_move_legal(buffer);
 
             if legal_moves_remaining && Bitboard::is_any_move_non_quiescent(buffer) {
@@ -485,7 +488,7 @@ impl<T: UciTx, H: Heuristic, M: MoveOrder> Search<T, H, M> {
             return ValuedMove::leaf(value);
         }
 
-        let pv_move = if pv { self.state.principal_variation.as_ref().unwrap().get(ply - depth).copied() } else { None };
+        let pv_move = if is_pv { self.state.principal_variation.as_ref().unwrap().get(ply_depth_from_root).copied() } else { None };
         self.move_order.sort(buffer, pv_move, tt_move);
 
         let mut best_value = self.heuristic.loss_score();
@@ -506,7 +509,7 @@ impl<T: UciTx, H: Heuristic, M: MoveOrder> Search<T, H, M> {
 
             legal_moves_encountered = true;
 
-            let child = self.negamax(&mut next_buffer, depth - 1, ply, -beta, -alpha, pv_move.map(|pv_mv| pv_mv.bits == mv.bits).unwrap_or(false), zobrist ^ zobrist_xor);
+            let child = self.negamax(&mut next_buffer, ply_depth_from_root + 1, max_ply, -beta, -alpha, pv_move.map(|pv_mv| pv_mv.bits == mv.bits).unwrap_or(false), zobrist ^ zobrist_xor);
 
             if self.flags.stop_as_soon_as_possible {
                 return ValuedMove::new(0, None, None);
@@ -545,7 +548,7 @@ impl<T: UciTx, H: Heuristic, M: MoveOrder> Search<T, H, M> {
                 Exact
             };
 
-            self.state.transposition_table.put(zobrist, TtEntry::new(result.clone(), depth, best_value, node_type));
+            self.state.transposition_table.put(zobrist, TtEntry::new(result.clone(), remaining_draft, best_value, node_type));
         }
 
         // TODO transposition table
@@ -690,7 +693,7 @@ impl Default for EngineOptions {
         Self {
             debug: false,
             try_previous_pv: true,
-            contempt_factor: -10,
+            contempt_factor: 50,
         }
     }
 }
@@ -894,7 +897,7 @@ mod test {
         let moves = vec!["b1c3", "b8c6", "d2d4", "d7d5", "e2e4", "e7e6", "e4e5", "f8b4", "g1e2", "g8e7", "c1f4", "e8g8", "d1d3", "f7f6", "e5f6", "f8f6", "e1c1", "b4d6", "f4d6", "c7d6", "d3e3", "e6e5", "d4e5", "d6e5", "c3e4", "f6f7", "c1b1", "d8c7", "e4g5", "f7f8", "e2c3", "c6d4", "f1d3", "h7h6", "g5f3", "d4f3", "g2f3", "d5d4", "c3b5", "c7c2", "b1c2", "d4e3", "f2e3", "f8f3", "b5c7", "a8b8", "d3c4", "g8h7", "e3e4", "c8g4", "c4e6", "g4e6", "c7e6", "b8c8", "c2b1", "f3f6", "e6d8", "c8c7", "d1d3", "a7a6", "h1c1", "c7c1", "b1c1", "f6f1", "c1c2", "f1f4", "d3d7", "e7c6", "d8e6", "f4e4", "d7g7", "h7h8", "g7b7", "e4h4", "b7c7", "h4h2", "c2c3", "c6d4", "e6d4", "e5d4", "c3d4", "h2b2", "a2a3", "b2a2", "c7c8", "h8g7", "c8c7", "g7f8", "c7h7", "a2a3", "h7h6", "f8e7", "h6b6", "a3a2", "d4d3", "a2a5", "d3d4", "a5a2", "d4d3", "a2a5", "d3d4"].into_iter().map(|s| UciMove::parse(s).unwrap()).collect::<Vec<_>>();
         let go = Go {
             depth: Some(10),
-            // search_moves: vec![UciMove::parse("a5a2").unwrap()],
+            search_moves: vec![UciMove::parse("a5a2").unwrap()],
             ..Go::default()
         };
         engine.accept(UciCommand::PositionFrom { fen: Fen::default(), moves });
