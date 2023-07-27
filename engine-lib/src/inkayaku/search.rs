@@ -3,16 +3,19 @@ use std::ops::{Div, Mul};
 use std::sync::Arc;
 use std::sync::mpsc::Receiver;
 use std::time::{Duration, SystemTime};
-use marvk_chess_board::board::constants::{ColorBits, WHITE, ZobristHash};
+
 use marvk_chess_board::board::{Bitboard, Move};
+use marvk_chess_board::board::constants::{ColorBits, WHITE, ZobristHash};
 use marvk_chess_core::fen::Fen;
 use marvk_chess_uci::uci::{Go, Info, Score, UciMove, UciTx};
 use SearchMessage::{UciDebug, UciGo, UciPonderHit, UciPositionFrom, UciQuit, UciStop, UciUciNewGame};
+
 use crate::inkayaku::heuristic::Heuristic;
 use crate::inkayaku::metrics::{Metrics, MetricsService};
 use crate::inkayaku::move_order::MoveOrder;
-use crate::inkayaku::table::transposition::NodeType::{Exact, Lowerbound, Upperbound};
+use crate::inkayaku::table::killer::KillerTable;
 use crate::inkayaku::table::transposition::{HashMapTranspositionTable, TranspositionTable, TtEntry};
+use crate::inkayaku::table::transposition::NodeType::{Exact, Lowerbound, Upperbound};
 use crate::inkayaku::zobrist_history::ZobristHistory;
 use crate::move_into_uci_move;
 
@@ -33,7 +36,7 @@ impl<T: UciTx, H: Heuristic, M: MoveOrder> Search<T, H, M> {
         Self { uci_tx, search_rx: rx, state: SearchState::default(), options, flags: SearchFlags::default(), params: SearchParams::default(), heuristic, move_order }
     }
 
-    pub(crate) fn idle(&mut self) {
+    pub fn idle(&mut self) {
         while !self.flags.quit_as_soon_as_possible {
             if let Ok(message) = self.search_rx.recv() {
                 match message {
@@ -135,6 +138,7 @@ impl<T: UciTx, H: Heuristic, M: MoveOrder> Search<T, H, M> {
         if self.flags.reset_for_next_search {
             self.state.metrics = MetricsService::default();
             self.state.transposition_table.clear();
+            self.state.killer_table.clear();
             self.flags.reset_for_next_search = false;
         } else {
             self.state.metrics.last = Metrics::default();
@@ -213,6 +217,7 @@ impl<T: UciTx, H: Heuristic, M: MoveOrder> Search<T, H, M> {
 
     fn best_move(&mut self) -> (Option<UciMove>, Option<UciMove>) {
         self.state.transposition_table.clear();
+        self.state.killer_table.age(2);
 
         self.state.started_at = SystemTime::now();
 
@@ -386,7 +391,8 @@ impl<T: UciTx, H: Heuristic, M: MoveOrder> Search<T, H, M> {
         }
 
         let pv_move = if is_pv { self.state.principal_variation.as_ref().unwrap().get(ply_depth_from_root).copied() } else { None };
-        self.move_order.sort(buffer, pv_move, tt_move);
+        let killer_move = self.state.killer_table.get(remaining_draft);
+        self.move_order.sort(buffer, pv_move, tt_move, killer_move);
 
         let mut best_value = self.heuristic.loss_score();
         let mut best_child: Option<ValuedMove> = None;
@@ -425,6 +431,7 @@ impl<T: UciTx, H: Heuristic, M: MoveOrder> Search<T, H, M> {
             self.state.bitboard.unmake(*mv);
 
             if alpha >= beta {
+                self.state.killer_table.put(remaining_draft, *mv);
                 break;
             }
         }
@@ -474,7 +481,7 @@ impl<T: UciTx, H: Heuristic, M: MoveOrder> Search<T, H, M> {
 
         buffer.clear();
         self.state.bitboard.generate_pseudo_legal_non_quiescent_moves_with_buffer(buffer);
-        self.move_order.sort(buffer, None, None);
+        self.move_order.sort(buffer, None, None, None);
 
         for mv in buffer {
             self.state.bitboard.make(*mv);
@@ -612,6 +619,7 @@ impl Default for EngineOptions {
 struct SearchState {
     bitboard: Bitboard,
     transposition_table: HashMapTranspositionTable,
+    killer_table: KillerTable,
     principal_variation: Option<Vec<Move>>,
     zobrist_history: ZobristHistory,
     started_at: SystemTime,
@@ -634,6 +642,7 @@ impl Default for SearchState {
         Self {
             bitboard: Bitboard::default(),
             transposition_table: HashMapTranspositionTable::new(10_000_000),
+            killer_table: KillerTable::default(),
             principal_variation: None,
             zobrist_history: ZobristHistory::default(),
             started_at: SystemTime::UNIX_EPOCH,
@@ -663,6 +672,7 @@ struct SearchParams {
 #[cfg(test)]
 mod test {
     use marvk_chess_board::board::constants::{BLACK, WHITE};
+
     use crate::inkayaku::search::calculate_heuristic_factor;
 
     #[test]

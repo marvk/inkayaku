@@ -3,7 +3,7 @@ use std::cmp::Reverse;
 use marvk_chess_board::board::Move;
 
 pub trait MoveOrder {
-    fn sort(&self, moves: &mut Vec<Move>, pv_move: Option<Move>, tt_move: Option<Move>);
+    fn sort(&self, moves: &mut Vec<Move>, pv_move: Option<Move>, transposition_move: Option<Move>, killer_move: Option<Move>);
 }
 
 #[derive(Default)]
@@ -22,8 +22,13 @@ impl MvvLvaMoveOrder {
 }
 
 impl MoveOrder for MvvLvaMoveOrder {
-    fn sort(&self, moves: &mut Vec<Move>, pv_move: Option<Move>, tt_move: Option<Move>) {
-        moves.sort_by_key(|mv| Reverse(Self::eval(mv) + Self::move_bonus(mv, pv_move, 900_000) + Self::move_bonus(mv, tt_move, 800_000)));
+    fn sort(&self, moves: &mut Vec<Move>, pv_move: Option<Move>, transposition_move: Option<Move>, killer_move: Option<Move>) {
+        moves.sort_by_key(|mv| Reverse(
+            Self::eval(mv)
+                + Self::move_bonus(mv, pv_move, 900_000)
+                + Self::move_bonus(mv, transposition_move, 800_000)
+                + Self::move_bonus(mv, killer_move, 700_000)
+        ));
     }
 }
 
@@ -42,7 +47,7 @@ mod tests {
 
         let order = MvvLvaMoveOrder {};
 
-        order.sort(&mut moves, None, None);
+        order.sort(&mut moves, None, None, None);
 
         for mv in moves {
             println!("{}", mv.to_pgn_string(&mut bitboard).unwrap());
