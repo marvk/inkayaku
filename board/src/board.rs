@@ -676,7 +676,7 @@ impl Bitboard {
             mv.set_self_lost_king_side_castle();
         }
 
-        mv.mvvlva = self.mvv_lva(piece_active, piece_attacked);
+        mv.mvvlva = Self::mvv_lva(piece_active, piece_attacked);
         result.push(mv);
     }
 
@@ -684,7 +684,8 @@ impl Bitboard {
         0, 100, 320, 330, 500, 900, 901,
     ];
 
-    fn mvv_lva(&self, piece_active: PieceBits, piece_attacked: PieceBits) -> i32 {
+    /// Returns a value in `0..=230300`
+    fn mvv_lva(piece_active: PieceBits, piece_attacked: PieceBits) -> i32 {
         if piece_attacked == NO_PIECE || piece_attacked == KING {
             return 0;
         }
@@ -1463,10 +1464,12 @@ impl Display for Bitboard {
 mod tests {
     use rand::prelude::{SliceRandom, StdRng};
     use rand::SeedableRng;
+    use marvk_chess_core::constants::piece::Piece;
 
     use marvk_chess_core::fen::Fen;
 
     use crate::board::Bitboard;
+    use crate::board::constants::PieceBits;
 
     #[test]
     fn test_zobrist_consistency() {
@@ -1657,6 +1660,26 @@ mod tests {
         let board = Bitboard::new(&fen_in_check);
 
         assert!(!board.is_current_in_check())
+    }
+
+    #[test]
+    #[ignore]
+    fn print_mvv_lva() {
+        let mut result = vec![];
+
+        for attacker in Piece::VALUES {
+            for defender in Piece::VALUES {
+                let mvv_lva = Bitboard::mvv_lva(attacker.index as PieceBits, defender.index as PieceBits);
+
+                result.push((attacker, defender, mvv_lva));
+            }
+        }
+
+        result.sort_by_key(|e| e.2);
+
+        for (attacker, defender, mvv_lva) in result {
+            println!("{} x {} = {}", attacker.name, defender.name, mvv_lva);
+        }
     }
 }
 

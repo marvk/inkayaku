@@ -1,3 +1,4 @@
+use std::cmp::min;
 use marvk_chess_board::board::Move;
 
 #[derive(Default)]
@@ -11,7 +12,7 @@ impl KillerTable {
     }
 
     pub fn age(&mut self, plys: usize) {
-        self.table.drain(0..plys);
+        self.table.drain(0..min(plys, self.table.len()));
     }
 
     pub fn put(&mut self, depth: usize, mv: Move) {

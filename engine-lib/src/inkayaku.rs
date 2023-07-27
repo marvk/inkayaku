@@ -16,7 +16,6 @@ use crate::inkayaku::search::SearchMessage::{UciDebug, UciPonderHit, UciQuit, Uc
 mod heuristic;
 mod move_order;
 mod zobrist_history;
-mod buffer;
 mod metrics;
 mod search;
 mod table;
