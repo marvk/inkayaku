@@ -15,9 +15,10 @@ use UciCommand::*;
 use UciCommand::Go as GoCommand;
 
 use crate::inkayaku::heuristic::{Heuristic, SimpleHeuristic};
+use crate::inkayaku::metrics::{Metrics, MetricsService};
 use crate::inkayaku::move_order::{MoveOrder, MvvLvaMoveOrder};
 use crate::inkayaku::SearchMessage::{UciDebug, UciPonderHit, UciQuit, UciStop};
-use crate::inkayaku::transposition_table::{ArrayTranspositionTable, HashMapTranspositionTable, TranspositionTable, TtEntry};
+use crate::inkayaku::transposition_table::{HashMapTranspositionTable, TranspositionTable, TtEntry};
 use crate::inkayaku::transposition_table::NodeType::{Exact, Lowerbound, Upperbound};
 use crate::inkayaku::zobrist_history::ZobristHistory;
 use crate::move_into_uci_move;
@@ -26,6 +27,8 @@ mod heuristic;
 mod transposition_table;
 mod move_order;
 mod zobrist_history;
+mod buffer;
+mod metrics;
 
 pub struct Inkayaku<T: UciTx + Send + Sync + 'static> {
     uci_tx: Arc<T>,
@@ -213,11 +216,7 @@ impl<T: UciTx, H: Heuristic, M: MoveOrder> Search<T, H, M> {
         Vec::with_capacity(200)
     }
 
-    #[inline(always)]
-    fn board(&mut self) -> &mut Bitboard {
-        &mut self.state.bitboard
-    }
-
+    /// Reset the search for the next go
     fn reset_for_go(&mut self) {
         if self.flags.reset_for_next_search {
             self.state.metrics = MetricsService::default();
@@ -230,6 +229,7 @@ impl<T: UciTx, H: Heuristic, M: MoveOrder> Search<T, H, M> {
         self.flags = SearchFlags::default();
     }
 
+    // Start the search
     pub fn go(&mut self) {
         self.reset_for_go();
 
@@ -242,20 +242,14 @@ impl<T: UciTx, H: Heuristic, M: MoveOrder> Search<T, H, M> {
         self.state.is_running = false;
     }
 
-    fn self_time_remaining(&self) -> Option<Duration> {
-        if self.state.bitboard.turn == WHITE {
-            self.params.go.white_time
-        } else {
-            self.params.go.black_time
-        }
+    // Time remaining of the engine
+    fn get_self_time_remaining(&self) -> Option<Duration> {
+        if self.state.bitboard.turn == WHITE { self.params.go.white_time } else { self.params.go.black_time }
     }
 
-    fn self_increment(&self) -> Option<Duration> {
-        if self.state.bitboard.turn == WHITE {
-            self.params.go.white_increment
-        } else {
-            self.params.go.black_increment
-        }
+    /// Increment of the engine
+    fn get_self_increment(&self) -> Option<Duration> {
+        if self.state.bitboard.turn == WHITE { self.params.go.white_increment } else { self.params.go.black_increment }
     }
 
     /// Check if the last played move was the ponder move. If it was, calculate the current pv.
@@ -281,11 +275,9 @@ impl<T: UciTx, H: Heuristic, M: MoveOrder> Search<T, H, M> {
         self.uci_tx.debug(&message);
     }
 
-
     fn calculate_max_thinking_time(&self) -> Option<Duration> {
-        let increment = self.self_increment();
-        let time_remaining = self.self_time_remaining();
-
+        let increment = self.get_self_increment();
+        let time_remaining = self.get_self_time_remaining();
 
         if let Some(time_remaining) = time_remaining {
             if let Some(increment) = increment {
@@ -328,7 +320,7 @@ impl<T: UciTx, H: Heuristic, M: MoveOrder> Search<T, H, M> {
         let mut score = None;
 
         for depth in 1..=max_depth {
-            let current_best_move = self.negamax(
+            let current_best_move = self.search_negamax(
                 &mut self.create_buffer(),
                 0,
                 depth,
@@ -345,7 +337,7 @@ impl<T: UciTx, H: Heuristic, M: MoveOrder> Search<T, H, M> {
             let stop = aborted || too_little_time;
 
             if !stop {
-                let bb_pv = principal_variation(&current_best_move);
+                let bb_pv = current_best_move.calculate_principal_variation();
                 self.state.principal_variation = Some(bb_pv.iter().map(|&&mv| mv).collect());
                 uci_pv = Some(bb_pv.into_iter().map(|&mv| move_into_uci_move(mv)).collect::<Vec<_>>());
                 score = Some(
@@ -362,7 +354,7 @@ impl<T: UciTx, H: Heuristic, M: MoveOrder> Search<T, H, M> {
                 time: Some(elapsed),
                 score,
                 depth: Some((if aborted { depth - 1 } else { depth }) as u32),
-                string: self.debug_string(),
+                string: self.generate_debug_string_if_enabled(),
                 ..self.generate_info()
             });
 
@@ -376,37 +368,28 @@ impl<T: UciTx, H: Heuristic, M: MoveOrder> Search<T, H, M> {
         (best_move.and_then(|vm| vm.mv).map(move_into_uci_move), self.state.ponder_move().map(move_into_uci_move))
     }
 
-    fn generate_info(&self) -> Info {
-        Info {
-            nodes: Some(self.state.metrics.last.total_nodes()),
-            hash_full: Some((self.state.transposition_table.load_factor() * 1000.0) as u32),
-            nps: Some(self.state.metrics.last.nps_with_duration(&self.state.elapsed())),
-            ..Info::EMPTY
+    fn evaluate(&self, color: ColorBits, legal_moves_remaining: bool) -> i32 {
+        calculate_heuristic_factor(color) * self.heuristic.evaluate(&self.state.bitboard, legal_moves_remaining)
+    }
+
+    #[inline(always)]
+    fn should_check_flags(&mut self) -> bool {
+        self.state.metrics.last.negamax_nodes % 100000 == 0 && self.state.metrics.last.negamax_nodes > 0
+    }
+
+    fn filter_search_moves(&mut self, buffer: &mut Vec<Move>) {
+        let search_moves = &self.params.go.search_moves;
+
+        if !search_moves.is_empty() {
+            buffer.retain(|&mv| {
+                search_moves.contains(&move_into_uci_move(mv))
+            });
         }
     }
 
-    fn debug_string(&self) -> Option<String> {
-        if self.options.debug { Some(self.generate_debug()) } else { None }
-    }
-
-    fn generate_debug(&self) -> String {
-        format!("tphitrate {} nrate {} qrate {} avgqdepth {} qstartedrate {} qtphitrate {}",
-                self.state.metrics.last.table_hit_rate(),
-                self.state.metrics.last.negamax_node_rate(),
-                self.state.metrics.last.quiescence_node_rate(),
-                self.state.metrics.last.average_quiescence_termination_ply(),
-                self.state.metrics.last.quiescence_started_rate(),
-                self.state.metrics.last.quiescence_table_hit_rate(),
-        )
-    }
-
-    fn evaluate(&self, color: ColorBits, legal_moves_remaining: bool) -> i32 {
-        heuristic_factor(color) * self.heuristic.evaluate(&self.state.bitboard, legal_moves_remaining)
-    }
-
     #[allow(clippy::too_many_arguments)]
-    fn negamax(&mut self, buffer: &mut Vec<Move>, ply_depth_from_root: usize, max_ply: usize, alpha_original: i32, beta_original: i32, is_pv: bool, zobrist: ZobristHash) -> ValuedMove {
-        let color = self.board().turn;
+    fn search_negamax(&mut self, buffer: &mut Vec<Move>, ply_depth_from_root: usize, max_ply: usize, alpha_original: i32, beta_original: i32, is_pv: bool, zobrist: ZobristHash) -> ValuedMove {
+        let color = self.state.bitboard.turn;
 
         let check_flags = self.should_check_flags();
         if check_flags {
@@ -426,8 +409,8 @@ impl<T: UciTx, H: Heuristic, M: MoveOrder> Search<T, H, M> {
 
         self.state.metrics.increment_negamax_nodes();
 
-        let ply_clock = self.board().ply_clock();
-        let halfmove_clock = self.board().halfmove_clock;
+        let ply_clock = self.state.bitboard.ply_clock();
+        let halfmove_clock = self.state.bitboard.halfmove_clock;
         self.state.zobrist_history.set(ply_clock, zobrist);
 
         if self.state.zobrist_history.count_repetitions(ply_clock, halfmove_clock as u16) >= 3 {
@@ -464,7 +447,7 @@ impl<T: UciTx, H: Heuristic, M: MoveOrder> Search<T, H, M> {
         };
 
         buffer.clear();
-        self.board().generate_pseudo_legal_moves_with_buffer(buffer);
+        self.state.bitboard.generate_pseudo_legal_moves_with_buffer(buffer);
 
         let is_root = ply_depth_from_root == 0;
         if is_root {
@@ -477,11 +460,11 @@ impl<T: UciTx, H: Heuristic, M: MoveOrder> Search<T, H, M> {
 
         let is_max_ply = ply_depth_from_root == max_ply;
         if is_max_ply {
-            let legal_moves_remaining = self.board().is_any_move_legal(buffer);
+            let legal_moves_remaining = self.state.bitboard.is_any_move_legal(buffer);
 
             if legal_moves_remaining && Bitboard::is_any_move_non_quiescent(buffer) {
                 self.state.metrics.increment_started_quiescence_search();
-                return self.quiescence_search(0, buffer, alpha, beta);
+                return self.search_quiescence(0, buffer, alpha, beta);
             }
 
             let value = self.evaluate(color, legal_moves_remaining);
@@ -499,9 +482,9 @@ impl<T: UciTx, H: Heuristic, M: MoveOrder> Search<T, H, M> {
         let mut next_buffer = self.create_buffer();
 
         for mv in buffer {
-            self.board().make(*mv);
-            if !self.board().is_valid() {
-                self.board().unmake(*mv);
+            self.state.bitboard.make(*mv);
+            if !self.state.bitboard.is_valid() {
+                self.state.bitboard.unmake(*mv);
                 continue;
             }
 
@@ -509,7 +492,7 @@ impl<T: UciTx, H: Heuristic, M: MoveOrder> Search<T, H, M> {
 
             legal_moves_encountered = true;
 
-            let child = self.negamax(&mut next_buffer, ply_depth_from_root + 1, max_ply, -beta, -alpha, pv_move.map(|pv_mv| pv_mv.bits == mv.bits).unwrap_or(false), zobrist ^ zobrist_xor);
+            let child = self.search_negamax(&mut next_buffer, ply_depth_from_root + 1, max_ply, -beta, -alpha, pv_move.map(|pv_mv| pv_mv.bits == mv.bits).unwrap_or(false), zobrist ^ zobrist_xor);
 
             if self.flags.stop_as_soon_as_possible {
                 return ValuedMove::new(0, None, None);
@@ -525,7 +508,7 @@ impl<T: UciTx, H: Heuristic, M: MoveOrder> Search<T, H, M> {
 
             alpha = max(alpha, best_value);
 
-            self.board().unmake(*mv);
+            self.state.bitboard.unmake(*mv);
 
             if alpha >= beta {
                 break;
@@ -556,23 +539,8 @@ impl<T: UciTx, H: Heuristic, M: MoveOrder> Search<T, H, M> {
         result
     }
 
-    #[inline(always)]
-    fn should_check_flags(&mut self) -> bool {
-        self.state.metrics.last.negamax_nodes % 100000 == 0 && self.state.metrics.last.negamax_nodes > 0
-    }
-
-    fn filter_search_moves(&mut self, buffer: &mut Vec<Move>) {
-        let search_moves = &self.params.go.search_moves;
-
-        if !search_moves.is_empty() {
-            buffer.retain(|&mv| {
-                search_moves.contains(&move_into_uci_move(mv))
-            });
-        }
-    }
-
-    fn quiescence_search(&mut self, depth: u32, buffer: &mut Vec<Move>, alpha_original: i32, beta_original: i32) -> ValuedMove {
-        let color = self.board().turn;
+    fn search_quiescence(&mut self, depth: u32, buffer: &mut Vec<Move>, alpha_original: i32, beta_original: i32) -> ValuedMove {
+        let color = self.state.bitboard.turn;
 
         // TODO take attack moves from buffer on first call
 
@@ -591,23 +559,23 @@ impl<T: UciTx, H: Heuristic, M: MoveOrder> Search<T, H, M> {
         let mut next_buffer = Vec::new();
 
         buffer.clear();
-        self.board().generate_pseudo_legal_non_quiescent_moves_with_buffer(buffer);
+        self.state.bitboard.generate_pseudo_legal_non_quiescent_moves_with_buffer(buffer);
         self.move_order.sort(buffer, None, None);
 
         for mv in buffer {
-            self.board().make(*mv);
+            self.state.bitboard.make(*mv);
 
-            if !self.board().is_valid() {
-                self.board().unmake(*mv);
+            if !self.state.bitboard.is_valid() {
+                self.state.bitboard.unmake(*mv);
                 continue;
             }
 
             self.state.metrics.increment_quiescence_nodes();
 
-            let child = self.quiescence_search(depth + 1, &mut next_buffer, -beta_original, -alpha);
+            let child = self.search_quiescence(depth + 1, &mut next_buffer, -beta_original, -alpha);
             let value = -child.value;
 
-            self.board().unmake(*mv);
+            self.state.bitboard.unmake(*mv);
 
             if value >= beta_original {
                 self.state.metrics.register_quiescence_termination(depth as usize);
@@ -626,28 +594,36 @@ impl<T: UciTx, H: Heuristic, M: MoveOrder> Search<T, H, M> {
     }
 }
 
-#[inline(always)]
-fn heuristic_factor(color: ColorBits) -> i32 {
-    1 + (color as i32) * -2
-}
-
-fn principal_variation(valued_move: &ValuedMove) -> Vec<&Move> {
-    let mut result = Vec::new();
-
-    let option = Some(valued_move);
-    let mut maybe_current = option;
-
-    while maybe_current.is_some() {
-        let current = maybe_current.unwrap();
-        if let Some(mv) = &current.mv {
-            result.push(mv);
+/// Non-search related functionality
+impl<T: UciTx, H: Heuristic, M: MoveOrder> Search<T, H, M> {
+    fn generate_info(&self) -> Info {
+        Info {
+            nodes: Some(self.state.metrics.last.total_nodes()),
+            hash_full: Some((self.state.transposition_table.load_factor() * 1000.0) as u32),
+            nps: Some(self.state.metrics.last.nps_with_duration(&self.state.elapsed())),
+            ..Info::EMPTY
         }
-
-
-        maybe_current = (*current.pv_child).as_ref();
     }
 
-    result
+    fn generate_debug_string_if_enabled(&self) -> Option<String> {
+        if self.options.debug { Some(self.generate_debug_string()) } else { None }
+    }
+
+    fn generate_debug_string(&self) -> String {
+        format!("tphitrate {} nrate {} qrate {} avgqdepth {} qstartedrate {} qtphitrate {}",
+                self.state.metrics.last.table_hit_rate(),
+                self.state.metrics.last.negamax_node_rate(),
+                self.state.metrics.last.quiescence_node_rate(),
+                self.state.metrics.last.average_quiescence_termination_ply(),
+                self.state.metrics.last.quiescence_started_rate(),
+                self.state.metrics.last.quiescence_table_hit_rate(),
+        )
+    }
+}
+
+#[inline(always)]
+fn calculate_heuristic_factor(color: ColorBits) -> i32 {
+    1 + (color as i32) * -2
 }
 
 #[derive(Clone)]
@@ -668,6 +644,25 @@ impl ValuedMove {
 
     pub fn leaf(value: i32) -> Self {
         Self::new(value, None, None)
+    }
+
+    fn calculate_principal_variation(&self) -> Vec<&Move> {
+        let mut result = Vec::new();
+
+        let option = Some(self);
+        let mut maybe_current = option;
+
+        while maybe_current.is_some() {
+            let current = maybe_current.unwrap();
+            if let Some(mv) = &current.mv {
+                result.push(mv);
+            }
+
+
+            maybe_current = (*current.pv_child).as_ref();
+        }
+
+        result
     }
 }
 
@@ -750,101 +745,6 @@ struct SearchParams {
     moves: Vec<Move>,
 }
 
-#[derive(Default)]
-struct Metrics {
-    negamax_nodes: u64,
-    quiescence_nodes: u64,
-    duration: Duration,
-    transposition_hits: u64,
-    quiescence_transposition_hits: u64,
-    quiescence_termination_ply_sum: u64,
-    quiescence_termination_count: u64,
-    started_quiescence_search_count: u64,
-}
-
-impl Metrics {
-    fn total_nodes(&self) -> u64 {
-        self.negamax_nodes + self.quiescence_nodes
-    }
-
-    fn nps(&self) -> u64 {
-        self.nps_with_duration(&self.duration)
-    }
-
-    fn nps_with_duration(&self, duration: &Duration) -> u64 {
-        ((self.total_nodes() as f64 / duration.as_nanos() as f64) * 1_000_000_000.0) as u64
-    }
-
-    fn table_hit_rate(&self) -> f64 {
-        self.transposition_hits as f64 / ((self.transposition_hits + self.negamax_nodes) as f64)
-    }
-
-    fn quiescence_table_hit_rate(&self) -> f64 {
-        self.quiescence_transposition_hits as f64 / ((self.quiescence_transposition_hits + self.quiescence_nodes) as f64)
-    }
-
-    fn average_quiescence_termination_ply(&self) -> f64 {
-        self.quiescence_termination_ply_sum as f64 / self.quiescence_termination_count as f64
-    }
-
-    fn negamax_node_rate(&self) -> f64 {
-        self.negamax_nodes as f64 / self.total_nodes() as f64
-    }
-
-    fn quiescence_node_rate(&self) -> f64 {
-        self.quiescence_nodes as f64 / self.total_nodes() as f64
-    }
-
-    fn quiescence_started_rate(&self) -> f64 {
-        self.started_quiescence_search_count as f64 / self.negamax_nodes as f64
-    }
-}
-
-#[derive(Default)]
-struct MetricsService {
-    last: Metrics,
-    total: Metrics,
-}
-
-impl MetricsService {
-    fn increment_negamax_nodes(&mut self) {
-        self.last.negamax_nodes += 1;
-        self.total.negamax_nodes += 1;
-    }
-
-    fn increment_quiescence_nodes(&mut self) {
-        self.last.quiescence_nodes += 1;
-        self.total.quiescence_nodes += 1;
-    }
-
-    fn increment_duration(&mut self, duration: &Duration) {
-        self.last.duration = Duration::from_nanos((self.last.duration.as_nanos() + duration.as_nanos()) as u64);
-        self.total.duration = Duration::from_nanos((self.total.duration.as_nanos() + duration.as_nanos()) as u64);
-    }
-
-    fn increment_transposition_hits(&mut self) {
-        self.last.transposition_hits += 1;
-        self.total.transposition_hits += 1;
-    }
-
-    fn increment_started_quiescence_search(&mut self) {
-        self.last.started_quiescence_search_count += 1;
-        self.total.started_quiescence_search_count += 1;
-    }
-
-    fn increment_quiescence_transposition_hits(&mut self) {
-        self.last.quiescence_transposition_hits += 1;
-        self.total.quiescence_transposition_hits += 1;
-    }
-
-    fn register_quiescence_termination(&mut self, ply: usize) {
-        self.last.quiescence_termination_ply_sum += ply as u64;
-        self.last.quiescence_termination_count += 1;
-        self.total.quiescence_termination_ply_sum += ply as u64;
-        self.total.quiescence_termination_count += 1;
-    }
-}
-
 #[cfg(test)]
 mod test {
     use std::sync::Arc;
@@ -855,7 +755,7 @@ mod test {
     use marvk_chess_uci::uci::{Engine, Go, Score, UciCommand, UciMove, UciTxCommand};
     use marvk_chess_uci::uci::command::CommandUciTx;
 
-    use crate::inkayaku::{heuristic_factor, Inkayaku};
+    use crate::inkayaku::{calculate_heuristic_factor, Inkayaku};
 
     #[test]
     fn test_threefold() {
@@ -971,7 +871,7 @@ mod test {
 
     #[test]
     fn test_heuristic_factor() {
-        assert_eq!(heuristic_factor(BLACK), -1);
-        assert_eq!(heuristic_factor(WHITE), 1);
+        assert_eq!(calculate_heuristic_factor(BLACK), -1);
+        assert_eq!(calculate_heuristic_factor(WHITE), 1);
     }
 }
