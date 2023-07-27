@@ -1,8 +1,7 @@
 use std::collections::{HashMap, LinkedList};
 
 use marvk_chess_board::board::constants::ZobristHash;
-
-use crate::inkayaku::ValuedMove;
+use crate::inkayaku::search::ValuedMove;
 
 pub enum NodeType {
     Exact,
@@ -130,8 +129,8 @@ impl TranspositionTable for HashMapTranspositionTable {
 
 #[cfg(test)]
 mod test {
+    use crate::inkayaku::search::ValuedMove;
     use crate::inkayaku::transposition_table::{HashMapTranspositionTable, NodeType, TranspositionTable, TtEntry};
-    use crate::inkayaku::ValuedMove;
 
     fn gen_value() -> TtEntry {
         TtEntry::new(ValuedMove::leaf(0), 0, 0, 0, NodeType::Exact)
