@@ -335,7 +335,6 @@ impl<T: UciTx, H: Heuristic, M: MoveOrder> Search<T, H, M> {
         if self.state.zobrist_history.count_repetitions(ply_clock, halfmove_clock as u16) >= 3 {
             let contempt_factor_factor = if ply_depth_from_root % 2 == 0 { 1 } else { -1 };
 
-            // todo if depth == ply, null move
             return ValuedMove::leaf(self.heuristic.draw_score() + contempt_factor_factor * self.options.contempt_factor);
         }
 
@@ -412,7 +411,7 @@ impl<T: UciTx, H: Heuristic, M: MoveOrder> Search<T, H, M> {
 
             legal_moves_encountered = true;
 
-            let child = self.search_negamax(&mut next_buffer, ply_depth_from_root + 1, max_ply, -beta, -alpha, pv_move.map(|pv_mv| pv_mv.bits == mv.bits).unwrap_or(false), zobrist ^ zobrist_xor);
+            let child = self.search_negamax(&mut next_buffer, ply_depth_from_root + 1, max_ply, -beta, -alpha, is_pv && pv_move.map(|pv_mv| pv_mv.bits == mv.bits).unwrap_or(false), zobrist ^ zobrist_xor);
 
             if self.flags.stop_as_soon_as_possible {
                 return ValuedMove::new(0, None, None);
