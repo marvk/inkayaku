@@ -699,83 +699,6 @@ impl Bitboard {
 
 // Make/Unmake move
 impl Bitboard {
-    pub fn zobrist_xor(mv: Move) -> ZobristHash {
-        let mut result: ZobristHash = 0;
-
-        let self_color = mv.get_side_to_move();
-        let opponent_color = opposite_color(self_color);
-
-        result ^= Zobrist::BLACK_TO_MOVE_HASH;
-
-        if mv.is_self_lost_king_side_castle() {
-            result ^= Zobrist::castle_hash(KING, self_color);
-        }
-
-        if mv.is_self_lost_queen_side_castle() {
-            result ^= Zobrist::castle_hash(QUEEN, self_color);
-        }
-
-        if mv.is_opponent_lost_king_side_castle() {
-            result ^= Zobrist::castle_hash(KING, opponent_color);
-        }
-
-        if mv.is_opponent_lost_queen_side_castle() {
-            result ^= Zobrist::castle_hash(QUEEN, opponent_color);
-        }
-
-        if mv.get_previous_en_passant_square() != NO_SQUARE {
-            result ^= Zobrist::en_passant_square_hash(mv.get_previous_en_passant_square());
-        }
-
-        if mv.get_next_en_passant_square() != NO_SQUARE {
-            result ^= Zobrist::en_passant_square_hash(mv.get_next_en_passant_square());
-        }
-
-        let is_white_turn = self_color == WHITE;
-
-        let piece_moved = mv.get_piece_moved();
-        let piece_promoted = mv.get_promotion_piece();
-        let piece_attacked = mv.get_piece_attacked();
-        let source_square_shift = mv.get_source_square();
-        let target_square_shift = mv.get_target_square();
-
-        if mv.is_castle_move() {
-            let (rook_source_shift, king_source_shift, rook_target_shift, king_target_shift) = match target_square_shift {
-                C1 => (A1, E1, D1, C1),
-                G1 => (H1, E1, F1, G1),
-                C8 => (A8, E8, D8, C8),
-                G8 => (H8, E8, F8, G8),
-                _ => panic!(),
-            };
-
-            result ^= Zobrist::piece_square_hash(ROOK, rook_source_shift, self_color);
-            result ^= Zobrist::piece_square_hash(ROOK, rook_target_shift, self_color);
-            result ^= Zobrist::piece_square_hash(KING, king_source_shift, self_color);
-            result ^= Zobrist::piece_square_hash(KING, king_target_shift, self_color);
-        } else if mv.is_en_passant_attack() {
-            result ^= Zobrist::piece_square_hash(PAWN, source_square_shift, self_color);
-            result ^= Zobrist::piece_square_hash(PAWN, target_square_shift, self_color);
-
-            let pawn_target_shift = if is_white_turn {
-                target_square_shift + 8
-            } else {
-                target_square_shift - 8
-            };
-
-            result ^= Zobrist::piece_square_hash(PAWN, pawn_target_shift, opponent_color);
-        } else if mv.is_promotion() {
-            result ^= Zobrist::piece_square_hash(PAWN, source_square_shift, self_color);
-            result ^= Zobrist::piece_square_hash(piece_promoted, target_square_shift, self_color);
-            result ^= Zobrist::piece_square_hash(piece_attacked, target_square_shift, opponent_color);
-        } else {
-            result ^= Zobrist::piece_square_hash(piece_moved, source_square_shift, self_color);
-            result ^= Zobrist::piece_square_hash(piece_moved, target_square_shift, self_color);
-            result ^= Zobrist::piece_square_hash(piece_attacked, target_square_shift, opponent_color);
-        }
-
-        result
-    }
-
     pub fn make(&mut self, mv: Move) {
         let is_white_turn = self.is_white_turn();
 
@@ -1019,6 +942,163 @@ impl Bitboard {
         let king_attacks = KING_NONMAGICS.get_attacks(king_square_shift);
 
         (king_attacks & passive.kings()) != 0
+    }
+}
+
+// Zobrist
+impl Bitboard {
+    pub fn zobrist_xor(mv: Move) -> (ZobristHash, ZobristHash) {
+        let mut result: ZobristHash = 0;
+        let mut pawn_result: ZobristHash = 0;
+
+        let self_color = mv.get_side_to_move();
+        let opponent_color = opposite_color(self_color);
+
+        pawn_result ^= Zobrist::BLACK_TO_MOVE_HASH;
+
+        if mv.is_self_lost_king_side_castle() {
+            result ^= Zobrist::castle_hash(KING, self_color);
+        }
+
+        if mv.is_self_lost_queen_side_castle() {
+            result ^= Zobrist::castle_hash(QUEEN, self_color);
+        }
+
+        if mv.is_opponent_lost_king_side_castle() {
+            result ^= Zobrist::castle_hash(KING, opponent_color);
+        }
+
+        if mv.is_opponent_lost_queen_side_castle() {
+            result ^= Zobrist::castle_hash(QUEEN, opponent_color);
+        }
+
+        if mv.get_previous_en_passant_square() != NO_SQUARE {
+            pawn_result ^= Zobrist::en_passant_square_hash(mv.get_previous_en_passant_square());
+        }
+
+        if mv.get_next_en_passant_square() != NO_SQUARE {
+            pawn_result ^= Zobrist::en_passant_square_hash(mv.get_next_en_passant_square());
+        }
+
+        let is_white_turn = self_color == WHITE;
+
+        let piece_moved = mv.get_piece_moved();
+        let piece_promoted = mv.get_promotion_piece();
+        let piece_attacked = mv.get_piece_attacked();
+        let source_square_shift = mv.get_source_square();
+        let target_square_shift = mv.get_target_square();
+
+        if mv.is_castle_move() {
+            let (rook_source_shift, king_source_shift, rook_target_shift, king_target_shift) = match target_square_shift {
+                C1 => (A1, E1, D1, C1),
+                G1 => (H1, E1, F1, G1),
+                C8 => (A8, E8, D8, C8),
+                G8 => (H8, E8, F8, G8),
+                _ => panic!(),
+            };
+
+            result ^= Zobrist::piece_square_hash(ROOK, rook_source_shift, self_color);
+            result ^= Zobrist::piece_square_hash(ROOK, rook_target_shift, self_color);
+            result ^= Zobrist::piece_square_hash(KING, king_source_shift, self_color);
+            result ^= Zobrist::piece_square_hash(KING, king_target_shift, self_color);
+        } else if mv.is_en_passant_attack() {
+            pawn_result ^= Zobrist::piece_square_hash(PAWN, source_square_shift, self_color);
+            pawn_result ^= Zobrist::piece_square_hash(PAWN, target_square_shift, self_color);
+
+            let pawn_target_shift = if is_white_turn {
+                target_square_shift + 8
+            } else {
+                target_square_shift - 8
+            };
+
+            pawn_result ^= Zobrist::piece_square_hash(PAWN, pawn_target_shift, opponent_color);
+        } else {
+            if mv.is_promotion() {
+                pawn_result ^= Zobrist::piece_square_hash(PAWN, source_square_shift, self_color);
+                result ^= Zobrist::piece_square_hash(piece_promoted, target_square_shift, self_color);
+            } else if piece_moved == PAWN {
+                pawn_result ^= Zobrist::piece_square_hash(PAWN, source_square_shift, self_color);
+                pawn_result ^= Zobrist::piece_square_hash(PAWN, target_square_shift, self_color);
+            } else {
+                result ^= Zobrist::piece_square_hash(piece_moved, source_square_shift, self_color);
+                result ^= Zobrist::piece_square_hash(piece_moved, target_square_shift, self_color);
+            }
+
+            if piece_attacked == PAWN {
+                pawn_result ^= Zobrist::piece_square_hash(PAWN, target_square_shift, opponent_color);
+            } else {
+                result ^= Zobrist::piece_square_hash(piece_attacked, target_square_shift, opponent_color);
+            }
+        }
+
+        (result ^ pawn_result, pawn_result)
+    }
+
+    pub fn calculate_zobrist_pawn_hash(&self) -> ZobristHash {
+        Self::_zobrist_pawn_hash(&self.white, &self.black, self.turn, self.en_passant_square_shift)
+    }
+
+    pub fn calculate_zobrist_hash(&self) -> ZobristHash {
+        Self::_zobrist_hash(&self.white, &self.black, self.turn, self.en_passant_square_shift)
+    }
+
+    fn _zobrist_pawn_hash(white: &PlayerState, black: &PlayerState, turn: ColorBits, en_passant_square_shift: SquareShiftBits) -> ZobristHash {
+        let mut hash = Self::zobrist_hash_for_occupancy(white.pawns(), PAWN, WHITE)
+            ^ Self::zobrist_hash_for_occupancy(black.pawns(), PAWN, BLACK);
+
+        hash ^= Zobrist::BLACK_TO_MOVE_HASH * (1 - turn as u64);
+
+        if en_passant_square_shift != NO_SQUARE {
+            hash ^= Zobrist::en_passant_square_hash(en_passant_square_shift);
+        }
+
+        hash
+    }
+
+    fn _zobrist_hash(white: &PlayerState, black: &PlayerState, turn: ColorBits, en_passant_square_shift: SquareShiftBits) -> ZobristHash {
+        let mut hash =
+            Self::zobrist_hash_for_occupancy(white.kings(), KING, WHITE)
+                ^ Self::zobrist_hash_for_occupancy(white.queens(), QUEEN, WHITE)
+                ^ Self::zobrist_hash_for_occupancy(white.rooks(), ROOK, WHITE)
+                ^ Self::zobrist_hash_for_occupancy(white.bishops(), BISHOP, WHITE)
+                ^ Self::zobrist_hash_for_occupancy(white.knights(), KNIGHT, WHITE)
+                ^ Self::zobrist_hash_for_occupancy(black.kings(), KING, BLACK)
+                ^ Self::zobrist_hash_for_occupancy(black.queens(), QUEEN, BLACK)
+                ^ Self::zobrist_hash_for_occupancy(black.rooks(), ROOK, BLACK)
+                ^ Self::zobrist_hash_for_occupancy(black.bishops(), BISHOP, BLACK)
+                ^ Self::zobrist_hash_for_occupancy(black.knights(), KNIGHT, BLACK)
+            ;
+
+        if white.queen_side_castle {
+            hash ^= Zobrist::WHITE_QUEEN_CASTLE_HASH;
+        }
+
+        if white.king_side_castle {
+            hash ^= Zobrist::WHITE_KING_CASTLE_HASH;
+        }
+
+        if black.queen_side_castle {
+            hash ^= Zobrist::BLACK_QUEEN_CASTLE_HASH;
+        }
+
+        if black.king_side_castle {
+            hash ^= Zobrist::BLACK_KING_CASTLE_HASH;
+        }
+
+        hash ^ Self::_zobrist_pawn_hash(white, black, turn, en_passant_square_shift)
+    }
+
+    fn zobrist_hash_for_occupancy(mut occupancy: OccupancyBits, piece: PieceBits, color: ColorBits) -> ZobristHash {
+        let mut result = 0;
+
+        while occupancy != 0 {
+            let (mask, shift) = mask_and_shift_from_lowest_one_bit(occupancy);
+            occupancy &= !mask;
+
+            result ^= Zobrist::piece_square_hash(piece, shift, color);
+        }
+
+        result
     }
 }
 
@@ -1274,7 +1354,6 @@ impl Bitboard {
         Fen::new(&result).unwrap()
     }
 
-
     pub fn perft(&mut self, depth: usize) -> Vec<(Move, u64)> {
         let mut result = Vec::new();
 
@@ -1316,66 +1395,6 @@ impl Bitboard {
         }
 
         count
-    }
-
-    pub fn calculate_zobrist_hash(&self) -> ZobristHash {
-        Self::_zobrist_hash(&self.white, &self.black, self.turn, self.en_passant_square_shift)
-    }
-
-    fn _zobrist_hash(white: &PlayerState, black: &PlayerState, turn: ColorBits, en_passant_square_shift: SquareShiftBits) -> ZobristHash {
-        let mut hash =
-            Self::zobrist_hash_for_occupancy(white.kings(), KING, WHITE)
-                ^ Self::zobrist_hash_for_occupancy(white.queens(), QUEEN, WHITE)
-                ^ Self::zobrist_hash_for_occupancy(white.rooks(), ROOK, WHITE)
-                ^ Self::zobrist_hash_for_occupancy(white.bishops(), BISHOP, WHITE)
-                ^ Self::zobrist_hash_for_occupancy(white.knights(), KNIGHT, WHITE)
-                ^ Self::zobrist_hash_for_occupancy(white.pawns(), PAWN, WHITE)
-                ^ Self::zobrist_hash_for_occupancy(black.kings(), KING, BLACK)
-                ^ Self::zobrist_hash_for_occupancy(black.queens(), QUEEN, BLACK)
-                ^ Self::zobrist_hash_for_occupancy(black.rooks(), ROOK, BLACK)
-                ^ Self::zobrist_hash_for_occupancy(black.bishops(), BISHOP, BLACK)
-                ^ Self::zobrist_hash_for_occupancy(black.knights(), KNIGHT, BLACK)
-                ^ Self::zobrist_hash_for_occupancy(black.pawns(), PAWN, BLACK)
-            ;
-
-        if turn == BLACK {
-            hash ^= Zobrist::BLACK_TO_MOVE_HASH;
-        }
-
-        if en_passant_square_shift != NO_SQUARE {
-            hash ^= Zobrist::en_passant_square_hash(en_passant_square_shift);
-        }
-
-        if white.queen_side_castle {
-            hash ^= Zobrist::WHITE_QUEEN_CASTLE_HASH;
-        }
-
-        if white.king_side_castle {
-            hash ^= Zobrist::WHITE_KING_CASTLE_HASH;
-        }
-
-        if black.queen_side_castle {
-            hash ^= Zobrist::BLACK_QUEEN_CASTLE_HASH;
-        }
-
-        if black.king_side_castle {
-            hash ^= Zobrist::BLACK_KING_CASTLE_HASH;
-        }
-
-        hash
-    }
-
-    fn zobrist_hash_for_occupancy(mut occupancy: OccupancyBits, piece: PieceBits, color: ColorBits) -> ZobristHash {
-        let mut result = 0;
-
-        while occupancy != 0 {
-            let (mask, shift) = mask_and_shift_from_lowest_one_bit(occupancy);
-            occupancy &= !mask;
-
-            result ^= Zobrist::piece_square_hash(piece, shift, color);
-        }
-
-        result
     }
 }
 
@@ -1464,8 +1483,8 @@ impl Display for Bitboard {
 mod tests {
     use rand::prelude::{SliceRandom, StdRng};
     use rand::SeedableRng;
-    use marvk_chess_core::constants::piece::Piece;
 
+    use marvk_chess_core::constants::piece::Piece;
     use marvk_chess_core::fen::Fen;
 
     use crate::board::Bitboard;
@@ -1478,19 +1497,26 @@ mod tests {
         for _ in 0..1000 {
             let mut board = Bitboard::default();
             let mut zobrist_hash = board.calculate_zobrist_hash();
+            let mut zobrist_pawn_hash = board.calculate_zobrist_pawn_hash();
 
             for i in 1..200 {
                 let mut moves = board.generate_legal_moves();
 
+                let expected_base_hash = board.calculate_zobrist_hash();
+                let expected_base_pawn_hash = board.calculate_zobrist_pawn_hash();
                 for mv in &moves {
                     board.make(*mv);
-                    let xor = Bitboard::zobrist_xor(*mv);
+                    let (xor, pawn_xor) = Bitboard::zobrist_xor(*mv);
                     zobrist_hash ^= xor;
+                    zobrist_pawn_hash ^= pawn_xor;
                     assert_eq!(zobrist_hash, board.calculate_zobrist_hash());
+                    assert_eq!(zobrist_pawn_hash, board.calculate_zobrist_pawn_hash());
                     board.unmake(*mv);
                     zobrist_hash ^= xor;
+                    zobrist_pawn_hash ^= pawn_xor;
 
-                    assert_eq!(zobrist_hash, board.calculate_zobrist_hash());
+                    assert_eq!(zobrist_hash, expected_base_hash);
+                    assert_eq!(zobrist_pawn_hash, expected_base_pawn_hash);
                 }
 
                 moves.shuffle(&mut rng);
@@ -1498,10 +1524,12 @@ mod tests {
                 if let Some(mv) = moves.first() {
                     let fen = board.fen().fen;
                     board.make(*mv);
-                    let xor = Bitboard::zobrist_xor(*mv);
+                    let (xor, pawn_xor) = Bitboard::zobrist_xor(*mv);
                     zobrist_hash ^= xor;
+                    zobrist_pawn_hash ^= pawn_xor;
 
-                    assert_eq!(zobrist_hash, board.calculate_zobrist_hash(), "failed after move #{}: {:?} --- fen: {}", i, mv, fen);
+                    assert_eq!(zobrist_hash, board.calculate_zobrist_hash(), "failed hash after move #{}: {:?} --- fen: {}", i, mv, fen);
+                    assert_eq!(zobrist_pawn_hash, board.calculate_zobrist_pawn_hash(), "failed pawn hash after move #{}: {:?} --- fen: {}", i, mv, fen);
                 } else {
                     break;
                 }

@@ -407,7 +407,7 @@ impl<T: UciTx, H: Heuristic, M: MoveOrder> Search<T, H, M> {
                 continue;
             }
 
-            let zobrist_xor = Bitboard::zobrist_xor(*mv);
+            let (zobrist_xor, _) = Bitboard::zobrist_xor(*mv);
 
             legal_moves_encountered = true;
 
@@ -587,6 +587,7 @@ impl ValuedMove {
 }
 
 #[derive(Debug)]
+#[allow(clippy::enum_variant_names)]
 pub enum SearchMessage {
     UciUciNewGame,
     UciDebug(bool),

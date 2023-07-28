@@ -39,7 +39,7 @@ impl Zobrist {
     }
 
     #[inline(always)]
-    pub fn piece_square_hash(piece: PieceBits, square: SquareShiftBits, color: ColorBits) -> ZobristHash {
+    pub const fn piece_square_hash(piece: PieceBits, square: SquareShiftBits, color: ColorBits) -> ZobristHash {
         Self::PIECE_SQUARE_HASHES[(piece as usize) + (7 * color as usize)][square as usize]
     }
 
