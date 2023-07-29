@@ -259,11 +259,7 @@ impl<T: UciTx, H: Heuristic, M: MoveOrder> Search<T, H, M> {
                 let bb_pv = current_best_move.calculate_principal_variation();
                 self.state.principal_variation = Some(bb_pv.iter().map(|&&mv| mv).collect());
                 uci_pv = Some(bb_pv.into_iter().map(|&mv| move_into_uci_move(mv)).collect::<Vec<_>>());
-                score = Some(
-                    self.heuristic
-                        .find_mate_at_fullmove_clock(current_best_move.value, &self.state.bitboard)
-                        .unwrap_or(Score::Centipawn { score: current_best_move.value })
-                );
+                score = Some(self.heuristic.score_from_value(current_best_move.value, &self.state.bitboard));
 
                 best_move = Some(current_best_move);
             }

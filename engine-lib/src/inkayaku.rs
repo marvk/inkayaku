@@ -7,8 +7,8 @@ use marvk_chess_uci::uci::{Engine, ProtectionMessage, UciCommand, UciTx};
 use SearchMessage::{UciGo, UciPositionFrom, UciUciNewGame};
 use UciCommand::*;
 use UciCommand::Go as GoCommand;
+use crate::inkayaku::heuristic::simple::SimpleHeuristic;
 
-use crate::inkayaku::heuristic::SimpleHeuristic;
 use crate::inkayaku::move_order::MvvLvaMoveOrder;
 use crate::inkayaku::search::{EngineOptions, Search, SearchMessage};
 use crate::inkayaku::search::SearchMessage::{UciDebug, UciPonderHit, UciQuit, UciStop};
