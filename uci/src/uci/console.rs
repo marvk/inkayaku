@@ -98,7 +98,7 @@ impl<FConsumer: Fn(&str), FDebugConsumer: Fn(&str)> UciTx for ConsoleUciTx<FCons
             }
         }
 
-        fn move_array_to_string(uci_moves: &Vec<UciMove>) -> String {
+        fn move_array_to_string(uci_moves: &[UciMove]) -> String {
             uci_moves.iter().map(|m| format!("{}", m)).collect::<Vec<_>>().join(" ")
         }
 
@@ -118,7 +118,7 @@ impl<FConsumer: Fn(&str), FDebugConsumer: Fn(&str)> UciTx for ConsoleUciTx<FCons
         append_maybe(&mut msg, "seldepth", info.selective_depth);
         append_maybe(&mut msg, "time", info.time.map(|d| d.as_millis()));
         append_maybe(&mut msg, "nodes", info.nodes);
-        append_maybe(&mut msg, "pv", info.principal_variation.as_ref().map(move_array_to_string));
+        append_maybe(&mut msg, "pv", info.principal_variation.as_deref().map(move_array_to_string));
         append_maybe(&mut msg, "multipv", info.multi_pv);
         append_maybe(&mut msg, "score", info.score.map(score_to_string));
         append_maybe(&mut msg, "currmove", info.current_move.as_ref());
@@ -128,7 +128,7 @@ impl<FConsumer: Fn(&str), FDebugConsumer: Fn(&str)> UciTx for ConsoleUciTx<FCons
         append_maybe(&mut msg, "tbhits", info.table_hits);
         append_maybe(&mut msg, "sbhits", info.shredder_table_hits);
         append_maybe(&mut msg, "cpuload", info.cpu_load);
-        append_maybe(&mut msg, "refutation", info.refutation.as_ref().map(move_array_to_string));
+        append_maybe(&mut msg, "refutation", info.refutation.as_deref().map(move_array_to_string));
         append_maybe(&mut msg, "currline", info.current_line.as_ref().map(current_line_to_string));
         append_maybe(&mut msg, "string", info.string.as_ref());
 

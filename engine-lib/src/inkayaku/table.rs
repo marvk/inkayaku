@@ -42,3 +42,34 @@ impl<K: Eq + Hash + Copy, V> HashTable<K, V> {
         self.len() as f32 / self.capacity as f32
     }
 }
+
+#[cfg(test)]
+mod test {
+    use crate::inkayaku::table::HashTable;
+
+    #[test]
+    fn clear_oldest() {
+        let mut sut = HashTable::new(3);
+
+        sut.put(1, ());
+        assert_len(&mut sut, 1);
+        sut.put(1, ());
+        assert_len(&mut sut, 1);
+        sut.put(2, ());
+        assert_len(&mut sut, 2);
+        sut.put(2, ());
+        assert_len(&mut sut, 2);
+        sut.put(3, ());
+        assert_len(&mut sut, 3);
+        sut.put(4, ());
+        assert_len(&mut sut, 3);
+        sut.put(1, ());
+        assert_len(&mut sut, 3);
+    }
+
+    fn assert_len(sut: &mut HashTable<i32, ()>, len: usize) {
+        assert_eq!(sut.len(), len);
+        assert_eq!(sut.entry_list.len(), len);
+        assert_eq!(sut.entry_map.len(), len);
+    }
+}

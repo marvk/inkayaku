@@ -1,9 +1,10 @@
 use std::ops::Range;
+use std::str::FromStr;
 
 use lazy_static::lazy_static;
 use regex::{Captures, Regex};
 
-use crate::fen::ParseFenError::{ConcurrentNumbers, RankWithInvalidPieceCount};
+use FenParseError::{ConcurrentNumbers, IllegalNumberOfGroups, InvalidCapture, RankWithInvalidPieceCount};
 
 #[non_exhaustive]
 #[derive(Debug, Eq, PartialEq, Clone)]
@@ -18,50 +19,23 @@ pub struct Fen {
 }
 
 #[derive(Debug, Clone, Eq, PartialEq)]
-pub enum ParseFenError {
+pub enum FenParseError {
+    ConcurrentNumbers { rank: String },
+    /// Impossible error due to regex
+    IllegalNumberOfGroups(usize),
     InvalidCapture(String),
     RankWithInvalidPieceCount { rank: String, count: u32 },
-    IllegalNumberOfGroups(usize),
-    ConcurrentNumbers { rank: String },
 }
 
 lazy_static! {
-    pub static ref FEN_STARTPOS: Fen = Fen::new("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1").unwrap();
+    static ref FEN_STARTPOS: Fen = Fen::from_str(FEN_STARTPOS_STRING).unwrap();
 }
 
+pub const FEN_STARTPOS_STRING: &str = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
+
 impl Fen {
-    pub fn is_valid(fen: &str) -> bool {
-        Self::new(fen).is_ok()
-    }
-
-    pub fn new(fen: &str) -> Result<Fen, ParseFenError> {
-        if fen == "startpos" {
-            return Ok(FEN_STARTPOS.clone());
-        }
-
-        let fen = fen.to_string();
-        let temp_fen = fen.clone();
-        let captures = Self::parse(&temp_fen)?;
-
-        let group_to_slice = |match_index| {
-            captures.get(match_index).map(|m| {
-                m.range()
-            })
-        };
-
-        Self::validate_ranks(group_to_slice(1).map(|range| &fen[range.start..range.end]).unwrap())?;
-
-        Ok(
-            Self {
-                fen,
-                piece_placement: group_to_slice(1).unwrap(),
-                active_color: group_to_slice(2).unwrap(),
-                castling_availability: group_to_slice(3).unwrap(),
-                en_passant_target_square: group_to_slice(4).unwrap(),
-                halfmove_clock: group_to_slice(5),
-                fullmove_clock: group_to_slice(6),
-            }
-        )
+    pub fn is_valid(s: &str) -> bool {
+        Self::from_str(s).is_ok()
     }
 
     pub fn get_piece_placement(&self) -> &str {
@@ -89,19 +63,19 @@ impl Fen {
         }
     }
 
-    fn parse(fen: &str) -> Result<Captures, ParseFenError> {
+    fn parse(fen: &str) -> Result<Captures, FenParseError> {
         lazy_static! {
             static ref FEN_REGEX: Regex = Regex::new(r"^([PNBRQKpnbrqk1-8]{1,8}(?:/[PNBRQKpnbrqk1-8]{1,8}){7}) ([bw]) (KQ?k?q?|Qk?q?|kq?|q|-) ([a-h][1-8]|-)(?: (\d+) (\d+))?$").unwrap();
         }
 
         match FEN_REGEX.captures(fen) {
             Some(captures) if (captures.len() == 7 || captures.len() == 5) => Ok(captures),
-            Some(captures) => Err(ParseFenError::IllegalNumberOfGroups(captures.len())),
-            None => Err(ParseFenError::InvalidCapture(fen.to_string())),
+            Some(captures) => Err(IllegalNumberOfGroups(captures.len())),
+            None => Err(InvalidCapture(fen.to_string())),
         }
     }
 
-    fn validate_ranks(ranks: &str) -> Result<(), ParseFenError> {
+    fn validate_ranks(ranks: &str) -> Result<(), FenParseError> {
         ranks
             .split('/')
             .map(Self::validate_rank)
@@ -109,7 +83,7 @@ impl Fen {
             .unwrap_or(Ok(()))
     }
 
-    fn validate_rank(rank: &str) -> Result<(), ParseFenError> {
+    fn validate_rank(rank: &str) -> Result<(), FenParseError> {
         let count: u32 = rank.chars().map(|c| c.to_digit(10).unwrap_or(1)).sum();
 
         if count != 8 {
@@ -128,6 +102,40 @@ impl Fen {
     }
 }
 
+impl FromStr for Fen {
+    type Err = FenParseError;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        if s == "startpos" {
+            return Ok(Fen::default());
+        }
+
+        let fen = s.to_string();
+        let temp_fen = fen.clone();
+        let captures = Self::parse(&temp_fen)?;
+
+        let group_to_slice = |match_index| {
+            captures.get(match_index).map(|m| {
+                m.range()
+            })
+        };
+
+        Self::validate_ranks(group_to_slice(1).map(|range| &fen[range.start..range.end]).unwrap())?;
+
+        Ok(
+            Self {
+                fen,
+                piece_placement: group_to_slice(1).unwrap(),
+                active_color: group_to_slice(2).unwrap(),
+                castling_availability: group_to_slice(3).unwrap(),
+                en_passant_target_square: group_to_slice(4).unwrap(),
+                halfmove_clock: group_to_slice(5),
+                fullmove_clock: group_to_slice(6),
+            }
+        )
+    }
+}
+
 impl Default for Fen {
     fn default() -> Self {
         FEN_STARTPOS.clone()
@@ -136,7 +144,11 @@ impl Default for Fen {
 
 #[cfg(test)]
 mod tests {
-    use crate::fen::{Fen, ParseFenError};
+    use std::str::FromStr;
+
+    use FenParseError::{ConcurrentNumbers, InvalidCapture, RankWithInvalidPieceCount};
+
+    use crate::fen::{Fen, FenParseError};
 
     #[derive(Debug, Eq, PartialEq)]
     struct ExtractedFen {
@@ -247,7 +259,7 @@ mod tests {
     fn fen_err_1() {
         test(
             "rnbqkbnr/pp1ppppp/8/2p5/4P3/5N2/PPPP1PPP/RNBQKB1R b -  1 2",
-            Err(ParseFenError::InvalidCapture("rnbqkbnr/pp1ppppp/8/2p5/4P3/5N2/PPPP1PPP/RNBQKB1R b -  1 2".to_string())),
+            Err(InvalidCapture("rnbqkbnr/pp1ppppp/8/2p5/4P3/5N2/PPPP1PPP/RNBQKB1R b -  1 2".to_string())),
         )
     }
 
@@ -255,7 +267,7 @@ mod tests {
     fn fen_err_2() {
         test(
             "rnbqbnr/pp1ppppp/8/2p5/4P3/5N2/PPPP1PPP/RNBQKB1R b - - 1 2",
-            Err(ParseFenError::RankWithInvalidPieceCount { rank: "rnbqbnr".to_string(), count: 7 }),
+            Err(RankWithInvalidPieceCount { rank: "rnbqbnr".to_string(), count: 7 }),
         )
     }
 
@@ -263,7 +275,7 @@ mod tests {
     fn fen_err_3() {
         test(
             "rnbqkbnr/pp1ppppp/8/2p4/4P3/5N2/PPPP1PPP/RNBQKB1R b - - 1 2",
-            Err(ParseFenError::RankWithInvalidPieceCount { rank: "2p4".to_string(), count: 7 }),
+            Err(RankWithInvalidPieceCount { rank: "2p4".to_string(), count: 7 }),
         )
     }
 
@@ -271,7 +283,7 @@ mod tests {
     fn fen_err_4() {
         test(
             "rnbqkbnr/pp1ppppp/8/2p5/4P3/5N2/PPPP1PPP/RNBQKB1R b - 1 2",
-            Err(ParseFenError::InvalidCapture("rnbqkbnr/pp1ppppp/8/2p5/4P3/5N2/PPPP1PPP/RNBQKB1R b - 1 2".to_string())),
+            Err(InvalidCapture("rnbqkbnr/pp1ppppp/8/2p5/4P3/5N2/PPPP1PPP/RNBQKB1R b - 1 2".to_string())),
         )
     }
 
@@ -279,12 +291,12 @@ mod tests {
     fn fen_err_5() {
         test(
             "rnbqkbnr/pp1ppppp/44/2p5/4P3/5N2/PPPP1PPP/RNBQKB1R b - - 1 2",
-            Err(ParseFenError::ConcurrentNumbers { rank: "44".to_string() }),
+            Err(ConcurrentNumbers { rank: "44".to_string() }),
         )
     }
 
-    fn test(fen_string: &str, expected: Result<ExtractedFen, ParseFenError>) {
-        assert_eq!(Fen::new(fen_string).map(|fen| {
+    fn test(fen_string: &str, expected: Result<ExtractedFen, FenParseError>) {
+        assert_eq!(Fen::from_str(fen_string).map(|fen| {
             println!("{:?}", fen);
             ExtractedFen::new(
                 fen.fen.as_str(),

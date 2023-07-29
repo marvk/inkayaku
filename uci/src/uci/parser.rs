@@ -2,9 +2,10 @@ use std::cell::RefCell;
 use std::cmp::max;
 use std::collections::{HashSet, VecDeque};
 use std::num::ParseIntError;
+use std::str::FromStr;
 use std::time::Duration;
 
-use marvk_chess_core::fen::{Fen, FEN_STARTPOS, ParseFenError};
+use marvk_chess_core::fen::{Fen, FenParseError};
 
 use crate::uci::{Go, ParseUciMoveError, UciMove};
 use crate::uci::parser::ParserError::*;
@@ -51,7 +52,7 @@ pub enum ParserError {
     UnknownCommand(String),
     UnexpectedEndOfCommand,
     UnexpectedToken { actual: String, expected: String },
-    InvalidFen(ParseFenError),
+    InvalidFen(FenParseError),
     InvalidInt(ParseIntError),
     DuplicatedToken(String),
     InvalidUciMove(ParseUciMoveError),
@@ -173,8 +174,8 @@ impl<'a> CommandParser<'a> {
 
     fn parse_position(&self) -> Result<UciCommand, ParserError> {
         let fen = match self.next()? {
-            "fen" => Fen::new(&self.until_token_or_end("moves")?).map_err(InvalidFen),
-            "startpos" => Ok(FEN_STARTPOS.clone()),
+            "fen" => Fen::from_str(&self.until_token_or_end("moves")?).map_err(InvalidFen),
+            "startpos" => Ok(Fen::default()),
             token => Err(UnexpectedToken { actual: token.to_string(), expected: format!("one of {:?}", &["fen", "startpos"]) })
         }?;
 
@@ -244,12 +245,13 @@ impl<'a> CommandParser<'a> {
 
 #[cfg(test)]
 mod tests {
+    use std::str::FromStr;
     use std::time::Duration;
 
     use marvk_chess_core::constants::piece::Piece;
     use marvk_chess_core::constants::square::Square;
-    use marvk_chess_core::fen::{Fen, FEN_STARTPOS};
-    use marvk_chess_core::fen::ParseFenError::ConcurrentNumbers;
+    use marvk_chess_core::fen::Fen;
+    use marvk_chess_core::fen::FenParseError::ConcurrentNumbers;
 
     use crate::uci::{ParseUciMoveError, UciCommand, UciMove};
     use crate::uci::Go;
@@ -303,14 +305,14 @@ mod tests {
     #[test]
     fn position() {
         assert_eq!(CommandParser::new("position fen").parse(), Err(UnexpectedEndOfCommand));
-        assert_eq!(CommandParser::new("position fen rnbqkbnr/pp1ppppp/8/2p5/4P3/5N2/PPPP1PPP/RNBQKB1R b - - 1 2").parse(), Ok(PositionFrom { fen: Fen::new("rnbqkbnr/pp1ppppp/8/2p5/4P3/5N2/PPPP1PPP/RNBQKB1R b - - 1 2").unwrap(), moves: Vec::new() }));
-        assert_eq!(CommandParser::new("position fen rnbqkbnr/pp1ppppp/8/2p5/4P3/5N2/PPPP1PPP/RNBQKB1R b - - 1 2 moves").parse(), Ok(PositionFrom { fen: Fen::new("rnbqkbnr/pp1ppppp/8/2p5/4P3/5N2/PPPP1PPP/RNBQKB1R b - - 1 2").unwrap(), moves: Vec::new() }));
-        assert_eq!(CommandParser::new("position fen rnbqkbnr/pp1ppppp/8/2p5/4P3/5N2/PPPP1PPP/RNBQKB1R b - - 1 2 moves h4h6q a1a2").parse(), Ok(PositionFrom { fen: Fen::new("rnbqkbnr/pp1ppppp/8/2p5/4P3/5N2/PPPP1PPP/RNBQKB1R b - - 1 2").unwrap(), moves: vec![UciMove::new_with_promotion(Square::H4, Square::H6, Piece::QUEEN), UciMove::new(Square::A1, Square::A2)] }));
+        assert_eq!(CommandParser::new("position fen rnbqkbnr/pp1ppppp/8/2p5/4P3/5N2/PPPP1PPP/RNBQKB1R b - - 1 2").parse(), Ok(PositionFrom { fen: Fen::from_str("rnbqkbnr/pp1ppppp/8/2p5/4P3/5N2/PPPP1PPP/RNBQKB1R b - - 1 2").unwrap(), moves: Vec::new() }));
+        assert_eq!(CommandParser::new("position fen rnbqkbnr/pp1ppppp/8/2p5/4P3/5N2/PPPP1PPP/RNBQKB1R b - - 1 2 moves").parse(), Ok(PositionFrom { fen: Fen::from_str("rnbqkbnr/pp1ppppp/8/2p5/4P3/5N2/PPPP1PPP/RNBQKB1R b - - 1 2").unwrap(), moves: Vec::new() }));
+        assert_eq!(CommandParser::new("position fen rnbqkbnr/pp1ppppp/8/2p5/4P3/5N2/PPPP1PPP/RNBQKB1R b - - 1 2 moves h4h6q a1a2").parse(), Ok(PositionFrom { fen: Fen::from_str("rnbqkbnr/pp1ppppp/8/2p5/4P3/5N2/PPPP1PPP/RNBQKB1R b - - 1 2").unwrap(), moves: vec![UciMove::new_with_promotion(Square::H4, Square::H6, Piece::QUEEN), UciMove::new(Square::A1, Square::A2)] }));
         assert_eq!(CommandParser::new("position fen rnbqkbnr/pp1ppppp/8/2p5/4P3/5N2/PPPP1PPP/RNBQKB1R b - - 1 2 moves h4h6q a1a9").parse(), Err(InvalidUciMove(InvalidFormat("a1a9".to_string()))));
         assert_eq!(CommandParser::new("position fen rnbqkbnr/pp1ppppp/8/44/4P3/5N2/PPPP1PPP/RNBQKB1R b - - 1 2 moves h4h6q a1a9").parse(), Err(InvalidFen(ConcurrentNumbers { rank: "44".to_string() })));
-        assert_eq!(CommandParser::new("position startpos").parse(), Ok(PositionFrom { fen: FEN_STARTPOS.clone(), moves: Vec::new() }));
-        assert_eq!(CommandParser::new("position startpos moves").parse(), Ok(PositionFrom { fen: FEN_STARTPOS.clone(), moves: Vec::new() }));
-        assert_eq!(CommandParser::new("position startpos moves h4h6q a1a2").parse(), Ok(PositionFrom { fen: FEN_STARTPOS.clone(), moves: vec![UciMove::new_with_promotion(Square::H4, Square::H6, Piece::QUEEN), UciMove::new(Square::A1, Square::A2)] }));
+        assert_eq!(CommandParser::new("position startpos").parse(), Ok(PositionFrom { fen: Fen::default(), moves: Vec::new() }));
+        assert_eq!(CommandParser::new("position startpos moves").parse(), Ok(PositionFrom { fen: Fen::default(), moves: Vec::new() }));
+        assert_eq!(CommandParser::new("position startpos moves h4h6q a1a2").parse(), Ok(PositionFrom { fen: Fen::default(), moves: vec![UciMove::new_with_promotion(Square::H4, Square::H6, Piece::QUEEN), UciMove::new(Square::A1, Square::A2)] }));
         assert_eq!(CommandParser::new("position startpos something").parse(), Err(UnexpectedToken { expected: "moves".to_string(), actual: "something".to_string() }));
     }
 

@@ -186,6 +186,7 @@ impl SimpleHeuristic {
         let white_has_queens_but_one_or_fewer_minor_pieces = white_has_queens && white_has_one_or_fewer_minor_pieces;
         let black_has_queens_but_one_or_fewer_minor_pieces = black_has_queens && black_has_one_or_fewer_minor_pieces;
 
+        #[allow(clippy::nonminimal_bool)]
         if (!white_has_queens && !black_has_queens)
             || (white_has_queens_but_one_or_fewer_minor_pieces && !black_has_queens)
             || (black_has_queens_but_one_or_fewer_minor_pieces && !white_has_queens)
@@ -249,7 +250,6 @@ impl Heuristic for SimpleHeuristic {
 #[cfg(test)]
 mod test {
     use marvk_chess_board::board::Bitboard;
-    use marvk_chess_core::fen::{Fen, FEN_STARTPOS};
 
     use crate::inkayaku::heuristic::{Heuristic, SimpleHeuristic};
 

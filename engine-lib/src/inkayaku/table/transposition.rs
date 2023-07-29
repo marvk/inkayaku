@@ -1,5 +1,3 @@
-use std::collections::{HashMap, LinkedList};
-
 use marvk_chess_board::board::constants::ZobristHash;
 
 use crate::inkayaku::search::ValuedMove;
@@ -39,16 +37,18 @@ pub struct ArrayTranspositionTable<const N: usize> {
 }
 
 impl<const N: usize> ArrayTranspositionTable<N> {
-    pub fn new() -> Self {
-        Self { entries: Self::new_vec(), load: 0 }
-    }
-
     fn new_vec() -> Vec<Option<TtEntry>> {
         (0..N).map(|_| None).collect()
     }
 
     const fn array_hash(hash: u64) -> usize {
         (hash % N as u64) as usize
+    }
+}
+
+impl<const N: usize> Default for ArrayTranspositionTable<N> {
+    fn default() -> Self {
+        Self { entries: Self::new_vec(), load: 0 }
     }
 }
 
@@ -117,41 +117,5 @@ impl TranspositionTable for HashMapTranspositionTable {
 
     fn load_factor(&self) -> f32 {
         self.hash_table.load_factor()
-    }
-}
-
-#[cfg(test)]
-mod test {
-    use crate::inkayaku::search::ValuedMove;
-    use crate::inkayaku::transposition_table::{HashMapTranspositionTable, NodeType, TranspositionTable, TtEntry};
-
-    fn gen_value() -> TtEntry {
-        TtEntry::new(ValuedMove::leaf(0), 0, 0, 0, NodeType::Exact)
-    }
-
-    #[test]
-    fn clear_oldest() {
-        let mut sut = HashMapTranspositionTable::new(3);
-
-        sut.put(1, gen_value());
-        assert_len(&mut sut, 1);
-        sut.put(1, gen_value());
-        assert_len(&mut sut, 1);
-        sut.put(2, gen_value());
-        assert_len(&mut sut, 2);
-        sut.put(2, gen_value());
-        assert_len(&mut sut, 2);
-        sut.put(3, gen_value());
-        assert_len(&mut sut, 3);
-        sut.put(4, gen_value());
-        assert_len(&mut sut, 3);
-        sut.put(1, gen_value());
-        assert_len(&mut sut, 3);
-    }
-
-    fn assert_len(sut: &mut HashMapTranspositionTable, len: usize) {
-        assert_eq!(sut.len(), len);
-        assert_eq!(sut.entry_list.len(), len);
-        assert_eq!(sut.entry_map.len(), len);
     }
 }

@@ -35,7 +35,6 @@ impl MoveOrder for MvvLvaMoveOrder {
 #[cfg(test)]
 mod tests {
     use marvk_chess_board::board::Bitboard;
-    use marvk_chess_core::fen::Fen;
 
     use crate::inkayaku::move_order::{MoveOrder, MvvLvaMoveOrder};
 

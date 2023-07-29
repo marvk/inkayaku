@@ -146,11 +146,12 @@ mod perft_debug {
             return;
         }
 
-        let mut bitboard = Bitboard::from_fen_string_unchecked(fen_str);
+        let fen: Fen = fen_str.parse().unwrap();
+        let mut bitboard = Bitboard::from(&fen);
 
         let moves = bitboard.perft(depth);
         let actual: HashSet<(String, u64)> = HashSet::from_iter(moves.iter().map(|t| (t.0.to_uci_string(), t.1)));
-        let expected: HashSet<(String, u64)> = HashSet::from_iter(REFERENCE_ENGINE.perft(fen, depth));
+        let expected: HashSet<(String, u64)> = HashSet::from_iter(REFERENCE_ENGINE.perft(&fen, depth));
 
         let actual_moves = actual.iter().map(|t| t.0.clone()).collect::<HashSet<_>>();
         let expected_moves = expected.iter().map(|t| t.0.clone()).collect::<HashSet<_>>();
@@ -206,7 +207,7 @@ mod perft_debug {
             bitboard.make(*option);
             println!("{}", bitboard);
 
-            let deep_fen = bitboard.fen();
+            let deep_fen = Fen::from(&bitboard);
 
             println!("{}", "-".repeat(100));
             compare_perft(&deep_fen.fen, depth - 1);
@@ -231,7 +232,6 @@ mod perft {
     use std::time::SystemTime;
 
     use marvk_chess_board::board::{Bitboard, Move};
-    use marvk_chess_core::fen::Fen;
 
     use crate::{expect, PerftResult};
 

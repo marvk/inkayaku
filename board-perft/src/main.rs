@@ -45,7 +45,6 @@ pub mod perft {
     use std::usize;
 
     use marvk_chess_board::board::{Bitboard, Move};
-    use marvk_chess_core::fen::Fen;
 
     use crate::{expect, PerftResult};
 

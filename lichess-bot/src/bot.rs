@@ -1,4 +1,5 @@
 use std::cell::{RefCell, RefMut};
+use std::str::FromStr;
 
 use std::sync::{Arc};
 use std::sync::mpsc::{channel, Receiver, Sender};
@@ -11,7 +12,7 @@ use futures_util::StreamExt;
 
 use marvk_chess_board::board::Bitboard;
 use marvk_chess_core::constants::color::Color;
-use marvk_chess_core::fen::{Fen, FEN_STARTPOS};
+use marvk_chess_core::fen::Fen;
 use marvk_chess_engine_lib::inkayaku::Inkayaku;
 use marvk_chess_lichess_api::api::bot_event_response::ChallengeEventDeclineReason;
 use marvk_chess_lichess_api::api::bot_game_state_response::{BotGameState, Clock, GameStateHolder};
@@ -61,7 +62,7 @@ impl GameThread {
         while let Some(state) = stream.next().await {
             match state {
                 BotGameState::GameFull { state, id, variant, speed, perf, rated, created_at, white, black, initial_fen, clock, days_per_turn, tournament_id } => {
-                    let fen = Fen::new(&initial_fen).unwrap();
+                    let fen = Fen::from_str(&initial_fen).unwrap();
 
                     self.game_state.borrow_mut().self_color = Some(if white.id == self.bot_id {
                         Color::WHITE
@@ -89,7 +90,7 @@ impl GameThread {
     }
 
     fn decide_accept(&self, variant: VariantFull, speed: SpeedKey, clock: Option<Clock>, initial_fen: &Fen) -> Option<ChallengeEventDeclineReason> {
-        if initial_fen.ne(&FEN_STARTPOS) || !matches!(variant.key, VariantKey::Standard) {
+        if initial_fen.ne(&Fen::default()) || !matches!(variant.key, VariantKey::Standard) {
             Some(ChallengeEventDeclineReason::Standard)
         } else {
             match speed {

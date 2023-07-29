@@ -1,12 +1,13 @@
 use std::char::from_digit;
 use std::fmt::{Debug, Display, Formatter};
+use std::str::FromStr;
 
 use marvk_chess_core::constants::color::Color;
 use marvk_chess_core::constants::colored_piece::ColoredPiece;
 use marvk_chess_core::constants::file::File;
 use marvk_chess_core::constants::piece::Piece;
 use marvk_chess_core::constants::square::Square;
-use marvk_chess_core::fen::{Fen, ParseFenError};
+use marvk_chess_core::fen::{Fen, FenParseError};
 
 use crate::{mask_and_shift_from_lowest_one_bit, opposite_color, piece_to_string, square_to_string};
 use crate::board::constants::*;
@@ -1460,14 +1461,14 @@ impl From<&Bitboard> for Fen {
         result.push(' ');
         result.push_str(&bitboard.fullmove_clock.to_string());
 
-        Fen::new(&result).unwrap()
+        result.parse().unwrap()
     }
 }
 
 // Instantiation
 impl Bitboard {
-    pub fn from_fen_string(fen: &str) -> Result<Bitboard, ParseFenError> {
-        Fen::new(fen).map(|fen| fen.into())
+    pub fn from_fen_string(fen: &str) -> Result<Bitboard, FenParseError> {
+        Fen::from_str(fen).map(|fen| fen.into())
     }
 
     pub fn from_fen_string_unchecked(fen: &str) -> Bitboard {
@@ -1533,6 +1534,7 @@ impl Display for Bitboard {
 
 #[cfg(test)]
 mod tests {
+    use std::str::FromStr;
     use rand::prelude::{SliceRandom, StdRng};
     use rand::SeedableRng;
 
@@ -1695,7 +1697,7 @@ mod tests {
         ];
 
         for fen_string in fens {
-            let expected = Fen::new(fen_string).unwrap();
+            let expected = Fen::from_str(fen_string).unwrap();
             let actual: Fen = Bitboard::from(&expected).into();
             assert_eq!(actual, expected);
         }

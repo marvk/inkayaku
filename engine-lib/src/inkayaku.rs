@@ -94,10 +94,11 @@ impl<T: UciTx + Send + Sync + 'static> Engine for Inkayaku<T> {
 
 #[cfg(test)]
 mod test {
+    use std::str::FromStr;
     use std::sync::Arc;
     use std::sync::mpsc::channel;
 
-    use marvk_chess_core::fen::{Fen, FEN_STARTPOS};
+    use marvk_chess_core::fen::Fen;
     use marvk_chess_uci::uci::{Engine, Go, Score, UciCommand, UciMove, UciTxCommand};
     use marvk_chess_uci::uci::command::CommandUciTx;
 
@@ -159,7 +160,7 @@ mod test {
 
     #[test]
     fn test_threefold_1() {
-        let fen = Fen::new("5rk1/5r2/p7/2pNp1q1/2P1P2p/1P3P1P/P4RP1/5RK1 w - - 0 28").unwrap();
+        let fen = Fen::from_str("5rk1/5r2/p7/2pNp1q1/2P1P2p/1P3P1P/P4RP1/5RK1 w - - 0 28").unwrap();
         let moves = vec![
             "d5b6", "g5e3", "b6d5", "e3g5",
             "d5b6", "g5e3", "b6d5",
@@ -170,7 +171,7 @@ mod test {
 
     #[test]
     fn test_threefold_2() {
-        let fen = FEN_STARTPOS.clone();
+        let fen = Fen::default();
         let moves = vec!["e2e4", "b8c6", "g1f3", "g8f6", "e4e5", "f6d5", "d2d4", "d7d6", "c2c4", "d5b6", "b1c3", "c8g4", "c1f4", "e7e6", "d1d3", "g4f3", "g2f3", "d6e5", "d4e5", "d8d4", "d3d4", "c6d4", "e1c1", "c7c5", "f4g3", "e8e7", "f3f4", "d4f5", "f1d3", "f5g3", "h2g3", "f7f6", "c1d2", "f6e5", "f4e5", "b6d7", "f2f4", "d7b6", "d2e3", "e7f7", "g3g4", "f8e7", "a2a4", "a7a5", "d1e1", "a8d8", "g4g5", "d8a8", "h1h3", "h7h6", "h3f3", "h6g5", "f4g5", "f7e8", "f3g3", "h8h2", "e1e2", "h2e2", "d3e2", "e8d7", "g3g4", "a8h8", "e2f3", "h8h3", "b2b3", "d7c7", "c3b5", "c7d7", "g4g2", "d7c8", "e3f4", "h3h4", "g2g4", "h4h3", "g4g2", "h3h4", "g2g4", "h4h3"];
         let move_to_draw = "g4g2";
         _test_threefold(moves, fen, move_to_draw);
@@ -178,7 +179,7 @@ mod test {
 
     #[test]
     fn test_threefold_3() {
-        let fen = Fen::new("5r1k/5r2/p7/2pNp1q1/2P1P2p/1P3P1P/P4RP1/5RK1 b - - 0 28").unwrap();
+        let fen = Fen::from_str("5r1k/5r2/p7/2pNp1q1/2P1P2p/1P3P1P/P4RP1/5RK1 b - - 0 28").unwrap();
         let moves = vec![
             "h8g8",
             "d5b6", "g5e3", "b6d5", "e3g5",
