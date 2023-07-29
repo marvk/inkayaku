@@ -172,8 +172,7 @@ pub mod perft {
     fn run_perft(fen_string: &str, expect: &[PerftResult]) {
         let start = SystemTime::now();
 
-        let fen = Fen::new(fen_string).unwrap();
-        let mut board = Bitboard::new(&fen);
+        let mut board = Bitboard::from_fen_string_unchecked(fen_string);
 
         let n = expect.len();
         let actual =

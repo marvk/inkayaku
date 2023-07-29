@@ -134,7 +134,7 @@ impl GameThread {
     }
 
     fn is_my_turn(&self, moves: &Vec<UciMove>) -> bool {
-        let mut bitboard = Bitboard::new(&self.game_state.borrow().initial_fen.clone().unwrap());
+        let mut bitboard: Bitboard = self.game_state.borrow().initial_fen.clone().unwrap().into();
 
         for mv in moves {
             bitboard.make_uci(&mv.to_string()).unwrap();

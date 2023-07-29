@@ -6,7 +6,7 @@ use marvk_chess_core::constants::colored_piece::ColoredPiece;
 use marvk_chess_core::constants::file::File;
 use marvk_chess_core::constants::piece::Piece;
 use marvk_chess_core::constants::square::Square;
-use marvk_chess_core::fen::{Fen, FEN_STARTPOS};
+use marvk_chess_core::fen::{Fen, ParseFenError};
 
 use crate::{mask_and_shift_from_lowest_one_bit, opposite_color, piece_to_string, square_to_string};
 use crate::board::constants::*;
@@ -245,70 +245,8 @@ pub struct Bitboard {
     pub halfmove_clock: u32,
 }
 
-impl Default for Bitboard {
-    fn default() -> Self {
-        Bitboard::new(&FEN_STARTPOS.clone())
-    }
-}
-
-// Instantiation
-impl Bitboard {
-    pub fn new(fen: &Fen) -> Self {
-        let mut white = PlayerState::default();
-        let mut black = PlayerState::default();
-
-        fen.get_piece_placement().split('/').enumerate().for_each(|(rank_index, file)| {
-            let mut file_index = 0;
-
-            file.chars().into_iter().for_each(|c| {
-                if c.is_ascii_digit() {
-                    file_index += c.to_digit(10).unwrap()
-                } else {
-                    let board = if c.is_uppercase() { &mut white } else { &mut black };
-
-                    let pieces = match c.to_ascii_lowercase() {
-                        'p' => board.pawns_ref(),
-                        'n' => board.knights_ref(),
-                        'b' => board.bishops_ref(),
-                        'r' => board.rooks_ref(),
-                        'q' => board.queens_ref(),
-                        'k' => board.kings_ref(),
-                        _ => panic!(),
-                    };
-
-                    *pieces |= square_mask_from_index(file_index, rank_index as u32);
-
-                    file_index += 1;
-                }
-            })
-        });
-
-        white.queen_side_castle = fen.get_castling_availability().contains('Q');
-        white.king_side_castle = fen.get_castling_availability().contains('K');
-        black.queen_side_castle = fen.get_castling_availability().contains('q');
-        black.king_side_castle = fen.get_castling_availability().contains('k');
-
-        let turn = match fen.get_active_color() {
-            "b" => BLACK,
-            "w" => WHITE,
-            _ => panic!(),
-        };
-        let en_passant_square_shift = if fen.get_en_passant_target_square() == "-" { NO_SQUARE } else { square_shift_from_fen(fen.get_en_passant_target_square()) };
-        let fullmove_clock = fen.get_fullmove_clock().parse::<u32>().unwrap();
-        let halfmove_clock = fen.get_halfmove_clock().parse::<u32>().unwrap();
-
-        Self { white, black, turn, en_passant_square_shift, fullmove_clock, halfmove_clock }
-    }
-}
-
 // Move Generation
 impl Bitboard {
-    pub fn generate_pseudo_legal_moves(&self) -> Vec<Move> {
-        let mut buffer = Vec::new();
-        self.generate_pseudo_legal_moves_with_buffer(&mut buffer);
-        buffer
-    }
-
     pub fn generate_legal_moves(&mut self) -> Vec<Move> {
         self.generate_pseudo_legal_moves()
             .into_iter()
@@ -316,9 +254,9 @@ impl Bitboard {
             .collect()
     }
 
-    pub fn generate_pseudo_legal_non_quiescent_moves(&self) -> Vec<Move> {
+    pub fn generate_pseudo_legal_moves(&self) -> Vec<Move> {
         let mut buffer = Vec::new();
-        self.generate_pseudo_legal_non_quiescent_moves_with_buffer(&mut buffer);
+        self.generate_pseudo_legal_moves_with_buffer(&mut buffer);
         buffer
     }
 
@@ -344,6 +282,12 @@ impl Bitboard {
         self.castle_moves(result, full_occupancy);
     }
 
+    pub fn generate_pseudo_legal_non_quiescent_moves(&self) -> Vec<Move> {
+        let mut buffer = Vec::new();
+        self.generate_pseudo_legal_non_quiescent_moves_with_buffer(&mut buffer);
+        buffer
+    }
+
     pub fn generate_pseudo_legal_non_quiescent_moves_with_buffer(&self, result: &mut Vec<Move>) {
         let (active, passive) = self.get_active_and_passive();
 
@@ -364,7 +308,7 @@ impl Bitboard {
         self.pawn_moves(result, true, active.pawns(), full_occupancy);
     }
 
-
+    #[allow(clippy::too_many_arguments)]
     fn sliding_moves(
         &self,
         result: &mut Vec<Move>,
@@ -402,7 +346,6 @@ impl Bitboard {
             self.generate_attacks(result, non_quiescent_only, source_square_shift, attack_occupancy, piece);
         }
     }
-
 
     fn pawn_attacks(&self, result: &mut Vec<Move>, mut pawn_occupancy: OccupancyBits, active_occupancy: OccupancyBits, passive_occupancy: OccupancyBits) {
         let pawn_attacks: &Nonmagics = if self.is_white_turn() { &WHITE_PAWN_NONMAGICS } else { &BLACK_PAWN_NONMAGICS };
@@ -599,6 +542,7 @@ impl Bitboard {
         }
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn make_move(
         &self,
         result: &mut Vec<Move>,
@@ -680,9 +624,7 @@ impl Bitboard {
         result.push(mv);
     }
 
-    const PIECE_VALUES: [i32; 7] = [
-        0, 100, 320, 330, 500, 900, 901,
-    ];
+    const PIECE_VALUES: [i32; 7] = [0, 100, 320, 330, 500, 900, 901, ];
 
     /// Returns a value in `0..=230300`
     fn mvv_lva(piece_active: PieceBits, piece_attacked: PieceBits) -> i32 {
@@ -699,6 +641,7 @@ impl Bitboard {
 
 // Make/Unmake move
 impl Bitboard {
+    /// "Make" `mv` on this bitboard.
     pub fn make(&mut self, mv: Move) {
         let is_white_turn = self.is_white_turn();
 
@@ -771,7 +714,7 @@ impl Bitboard {
         }
     }
 
-
+    /// "Unmake" `mv` on this bitboard
     pub fn unmake(&mut self, mv: Move) {
         let is_white_turn = self.is_white_turn();
 
@@ -947,6 +890,7 @@ impl Bitboard {
 
 // Zobrist
 impl Bitboard {
+    /// Calculate the zobrist xor difference and zobrist pawn xor difference for a move
     pub fn zobrist_xor(mv: Move) -> (ZobristHash, ZobristHash) {
         let mut result: ZobristHash = 0;
         let mut pawn_result: ZobristHash = 0;
@@ -1034,12 +978,13 @@ impl Bitboard {
         (result ^ pawn_result, pawn_result)
     }
 
-    pub fn calculate_zobrist_pawn_hash(&self) -> ZobristHash {
-        Self::_zobrist_pawn_hash(&self.white, &self.black, self.turn, self.en_passant_square_shift)
-    }
-
+    /// Calculate the zobrist hash for the current state from scratch
     pub fn calculate_zobrist_hash(&self) -> ZobristHash {
         Self::_zobrist_hash(&self.white, &self.black, self.turn, self.en_passant_square_shift)
+    }
+
+    pub fn calculate_zobrist_pawn_hash(&self) -> ZobristHash {
+        Self::_zobrist_pawn_hash(&self.white, &self.black, self.turn, self.en_passant_square_shift)
     }
 
     fn _zobrist_pawn_hash(white: &PlayerState, black: &PlayerState, turn: ColorBits, en_passant_square_shift: SquareShiftBits) -> ZobristHash {
@@ -1148,6 +1093,78 @@ impl Bitboard {
         opposite_color(self.turn)
     }
 
+    #[allow(clippy::wrong_self_convention)]
+    pub fn is_any_move_legal(&mut self, moves: &[Move]) -> bool {
+        for &mv in moves {
+            if self.is_move_legal(mv) {
+                return true;
+            }
+        }
+
+        false
+    }
+
+    #[inline(always)]
+    #[allow(clippy::wrong_self_convention)]
+    pub fn is_move_legal(&mut self, mv: Move) -> bool {
+        self.make(mv);
+        let result = self.is_valid();
+        self.unmake(mv);
+
+        result
+    }
+
+    #[allow(clippy::wrong_self_convention)]
+    pub fn is_any_move_non_quiescent(moves: &[Move]) -> bool {
+        moves.iter().any(|mv| mv.is_attack() || mv.is_promotion())
+    }
+
+    pub fn perft(&mut self, depth: usize) -> Vec<(Move, u64)> {
+        let mut result = Vec::new();
+
+        let mut buffer = Vec::new();
+        self.generate_pseudo_legal_moves_with_buffer(&mut buffer);
+
+        let mut next_buffer = Vec::new();
+        for mv in buffer {
+            self.make(mv);
+
+            if self.is_valid() {
+                result.push((mv, self._perft(&mut next_buffer, depth - 1)));
+                next_buffer.clear();
+            }
+
+            self.unmake(mv);
+        }
+
+        result
+    }
+
+    fn _perft(&mut self, buffer: &mut Vec<Move>, depth: usize) -> u64 {
+        if depth == 0 {
+            return 1;
+        }
+
+        let mut count = 0;
+        let mut next_buffer = Vec::new();
+        self.generate_pseudo_legal_moves_with_buffer(buffer);
+        for mv in buffer {
+            self.make(*mv);
+
+            if self.is_valid() {
+                count += self._perft(&mut next_buffer, depth - 1);
+                next_buffer.clear();
+            }
+
+            self.unmake(*mv);
+        }
+
+        count
+    }
+}
+
+// UCI and PGN conversions
+impl Bitboard {
     pub fn find_uci(&mut self, uci: &str) -> Result<Move, MoveFromUciError> {
         let uci = uci.trim();
         let result = self.generate_pseudo_legal_moves().into_iter().find(|mv| mv.to_uci_string() == uci).ok_or_else(|| MoveDoesNotExist(uci.to_string()))?;
@@ -1265,137 +1282,6 @@ impl Bitboard {
 
         Ok(format!("{}{}{}{}{}{}", piece, disambiguation_symbol, capture, target_square, promotion_piece, check_str))
     }
-
-    #[allow(clippy::wrong_self_convention)]
-    pub fn is_any_move_legal(&mut self, moves: &[Move]) -> bool {
-        for &mv in moves {
-            if self.is_move_legal(mv) {
-                return true;
-            }
-        }
-
-        false
-    }
-
-    #[inline(always)]
-    #[allow(clippy::wrong_self_convention)]
-    pub fn is_move_legal(&mut self, mv: Move) -> bool {
-        self.make(mv);
-        let result = self.is_valid();
-        self.unmake(mv);
-
-        result
-    }
-
-    #[allow(clippy::wrong_self_convention)]
-    pub fn is_any_move_non_quiescent(moves: &[Move]) -> bool {
-        moves.iter().any(|mv| mv.is_attack() || mv.is_promotion())
-    }
-
-    pub fn fen(&self) -> Fen {
-        let mut result = String::new();
-
-        for rank in 0..8 {
-            let mut consecutive_empty = 0;
-            for file in 0..8 {
-                let square = Square::by_indices(file, rank).unwrap();
-                let maybe_piece = self.get_colored_piece(square);
-                match maybe_piece {
-                    Some(piece) => {
-                        if consecutive_empty > 0 {
-                            result.push(from_digit(consecutive_empty, 10).unwrap());
-                        }
-                        consecutive_empty = 0;
-                        result.push(piece.fen);
-                    }
-                    None => {
-                        consecutive_empty += 1;
-                    }
-                };
-            }
-            if consecutive_empty > 0 {
-                result.push(from_digit(consecutive_empty, 10).unwrap());
-            }
-            if rank < 7 {
-                result.push('/');
-            }
-        }
-
-        result.push(' ');
-        result.push(if self.is_white_turn() { 'w' } else { 'b' });
-        result.push(' ');
-
-        let castle = [
-            ('K', self.white.king_side_castle),
-            ('Q', self.white.queen_side_castle),
-            ('k', self.black.king_side_castle),
-            ('q', self.black.queen_side_castle)
-        ].iter().filter(|t| t.1).map(|t| t.0).collect::<String>();
-
-        if castle.is_empty() {
-            result.push('-');
-        } else {
-            result.push_str(&castle);
-        };
-
-        result.push(' ');
-
-        if self.en_passant_square_shift != NO_SQUARE {
-            result.push_str(&square_to_string(self.en_passant_square_shift));
-        } else {
-            result.push('-');
-        }
-
-        result.push(' ');
-        result.push_str(&self.halfmove_clock.to_string());
-        result.push(' ');
-        result.push_str(&self.fullmove_clock.to_string());
-
-        Fen::new(&result).unwrap()
-    }
-
-    pub fn perft(&mut self, depth: usize) -> Vec<(Move, u64)> {
-        let mut result = Vec::new();
-
-        let mut buffer = Vec::new();
-        self.generate_pseudo_legal_moves_with_buffer(&mut buffer);
-
-        let mut next_buffer = Vec::new();
-        for mv in buffer {
-            self.make(mv);
-
-            if self.is_valid() {
-                result.push((mv, self._perft(&mut next_buffer, depth - 1)));
-                next_buffer.clear();
-            }
-
-            self.unmake(mv);
-        }
-
-        result
-    }
-
-    fn _perft(&mut self, buffer: &mut Vec<Move>, depth: usize) -> u64 {
-        if depth == 0 {
-            return 1;
-        }
-
-        let mut count = 0;
-        let mut next_buffer = Vec::new();
-        self.generate_pseudo_legal_moves_with_buffer(buffer);
-        for mv in buffer {
-            self.make(*mv);
-
-            if self.is_valid() {
-                count += self._perft(&mut next_buffer, depth - 1);
-                next_buffer.clear();
-            }
-
-            self.unmake(*mv);
-        }
-
-        count
-    }
 }
 
 impl Display for Move {
@@ -1420,6 +1306,172 @@ impl Display for Move {
             square_to_string(self.get_next_en_passant_square()),
             piece_to_string(self.get_promotion_piece()),
         )
+    }
+}
+
+impl Default for Bitboard {
+    fn default() -> Self {
+        Fen::default().into()
+    }
+}
+
+trait FenParseExt {
+    fn parse_player_states(&self) -> (PlayerState, PlayerState);
+    fn parse_turn(&self) -> ColorBits;
+    fn parse_en_passant_square_shift(&self) -> SquareShiftBits;
+    fn parse_fullmove_clock(&self) -> u32;
+    fn parse_halfmove_clock(&self) -> u32;
+}
+
+impl FenParseExt for Fen {
+    fn parse_player_states(&self) -> (PlayerState, PlayerState) {
+        let mut white = PlayerState::default();
+        let mut black = PlayerState::default();
+
+        self.get_piece_placement().split('/').enumerate().for_each(|(rank_index, file)| {
+            let mut file_index = 0;
+
+            file.chars().into_iter().for_each(|c| {
+                if c.is_ascii_digit() {
+                    file_index += c.to_digit(10).unwrap()
+                } else {
+                    let board = if c.is_uppercase() { &mut white } else { &mut black };
+
+                    let pieces = match c.to_ascii_lowercase() {
+                        'p' => board.pawns_ref(),
+                        'n' => board.knights_ref(),
+                        'b' => board.bishops_ref(),
+                        'r' => board.rooks_ref(),
+                        'q' => board.queens_ref(),
+                        'k' => board.kings_ref(),
+                        _ => panic!(),
+                    };
+
+                    *pieces |= square_mask_from_index(file_index, rank_index as u32);
+
+                    file_index += 1;
+                }
+            })
+        });
+
+        white.queen_side_castle = self.get_castling_availability().contains('Q');
+        white.king_side_castle = self.get_castling_availability().contains('K');
+        black.queen_side_castle = self.get_castling_availability().contains('q');
+        black.king_side_castle = self.get_castling_availability().contains('k');
+
+        (white, black)
+    }
+    fn parse_turn(&self) -> ColorBits {
+        match self.get_active_color() {
+            "b" => BLACK,
+            "w" => WHITE,
+            _ => panic!(),
+        }
+    }
+    fn parse_en_passant_square_shift(&self) -> SquareShiftBits { if self.get_en_passant_target_square() == "-" { NO_SQUARE } else { square_shift_from_fen(self.get_en_passant_target_square()) } }
+    fn parse_fullmove_clock(&self) -> u32 { self.get_fullmove_clock().parse::<u32>().unwrap() }
+    fn parse_halfmove_clock(&self) -> u32 { self.get_halfmove_clock().parse::<u32>().unwrap() }
+}
+
+impl From<Fen> for Bitboard {
+    fn from(fen: Fen) -> Self {
+        Self::from(&fen)
+    }
+}
+
+impl From<&Fen> for Bitboard {
+    fn from(fen: &Fen) -> Self {
+        let (white, black) = fen.parse_player_states();
+
+        Self {
+            white,
+            black,
+            turn: fen.parse_turn(),
+            en_passant_square_shift: fen.parse_en_passant_square_shift(),
+            fullmove_clock: fen.parse_fullmove_clock(),
+            halfmove_clock: fen.parse_halfmove_clock(),
+        }
+    }
+}
+
+impl From<Bitboard> for Fen {
+    fn from(bitboard: Bitboard) -> Self {
+        Self::from(&bitboard)
+    }
+}
+
+impl From<&Bitboard> for Fen {
+    fn from(bitboard: &Bitboard) -> Self {
+        let mut result = String::new();
+
+        for rank in 0..8 {
+            let mut consecutive_empty = 0;
+            for file in 0..8 {
+                let square = Square::by_indices(file, rank).unwrap();
+                let maybe_piece = bitboard.get_colored_piece(square);
+                match maybe_piece {
+                    Some(piece) => {
+                        if consecutive_empty > 0 {
+                            result.push(from_digit(consecutive_empty, 10).unwrap());
+                        }
+                        consecutive_empty = 0;
+                        result.push(piece.fen);
+                    }
+                    None => {
+                        consecutive_empty += 1;
+                    }
+                };
+            }
+            if consecutive_empty > 0 {
+                result.push(from_digit(consecutive_empty, 10).unwrap());
+            }
+            if rank < 7 {
+                result.push('/');
+            }
+        }
+
+        result.push(' ');
+        result.push(if bitboard.is_white_turn() { 'w' } else { 'b' });
+        result.push(' ');
+
+        let castle = [
+            ('K', bitboard.white.king_side_castle),
+            ('Q', bitboard.white.queen_side_castle),
+            ('k', bitboard.black.king_side_castle),
+            ('q', bitboard.black.queen_side_castle)
+        ].iter().filter(|t| t.1).map(|t| t.0).collect::<String>();
+
+        if castle.is_empty() {
+            result.push('-');
+        } else {
+            result.push_str(&castle);
+        };
+
+        result.push(' ');
+
+        if bitboard.en_passant_square_shift != NO_SQUARE {
+            result.push_str(&square_to_string(bitboard.en_passant_square_shift));
+        } else {
+            result.push('-');
+        }
+
+        result.push(' ');
+        result.push_str(&bitboard.halfmove_clock.to_string());
+        result.push(' ');
+        result.push_str(&bitboard.fullmove_clock.to_string());
+
+        Fen::new(&result).unwrap()
+    }
+}
+
+// Instantiation
+impl Bitboard {
+    pub fn from_fen_string(fen: &str) -> Result<Bitboard, ParseFenError> {
+        Fen::new(fen).map(|fen| fen.into())
+    }
+
+    pub fn from_fen_string_unchecked(fen: &str) -> Bitboard {
+        Self::from_fen_string(fen).unwrap()
     }
 }
 
@@ -1522,7 +1574,7 @@ mod tests {
                 moves.shuffle(&mut rng);
 
                 if let Some(mv) = moves.first() {
-                    let fen = board.fen().fen;
+                    let fen = Fen::from(&board).fen;
                     board.make(*mv);
                     let (xor, pawn_xor) = Bitboard::zobrist_xor(*mv);
                     zobrist_hash ^= xor;
@@ -1559,8 +1611,7 @@ mod tests {
     #[test]
     #[ignore]
     fn print_some_pgns() {
-        let fen = Fen::new("r4rk1/ppqnpp1p/6pb/4p3/5P2/2N4Q/PPP2P1P/2KR3R b - - 1 16").unwrap();
-        let mut board = Bitboard::new(&fen);
+        let mut board = Bitboard::from_fen_string_unchecked("r4rk1/ppqnpp1p/6pb/4p3/5P2/2N4Q/PPP2P1P/2KR3R b - - 1 16");
 
         for mv in board.generate_legal_moves() {
             println!("{}", mv.to_pgn_string(&mut board).unwrap());
@@ -1569,8 +1620,7 @@ mod tests {
 
     #[test]
     fn test_pgn1() {
-        let fen = Fen::new("3q4/2P5/8/8/4Q2Q/k7/8/K6Q w - - 0 1").unwrap();
-        let mut board = Bitboard::new(&fen);
+        let mut board = Bitboard::from_fen_string_unchecked("3q4/2P5/8/8/4Q2Q/k7/8/K6Q w - - 0 1");
 
         assert_eq!(board.uci_to_pgn("e4e1"), Ok("Qee1".to_string()));
         assert_eq!(board.uci_to_pgn("h4e1"), Ok("Qh4e1".to_string()));
@@ -1581,8 +1631,7 @@ mod tests {
 
     #[test]
     fn test_pgn2() {
-        let fen = Fen::new("8/8/5q2/4P1P1/8/k7/8/K7 w - - 0 1").unwrap();
-        let mut board = Bitboard::new(&fen);
+        let mut board = Bitboard::from_fen_string_unchecked("8/8/5q2/4P1P1/8/k7/8/K7 w - - 0 1");
 
         assert_eq!(board.uci_to_pgn("e5f6"), Ok("exf6".to_string()));
         assert_eq!(board.uci_to_pgn("g5f6"), Ok("gxf6".to_string()));
@@ -1590,8 +1639,7 @@ mod tests {
 
     #[test]
     fn test_pgn3() {
-        let fen = Fen::new("8/8/8/1PpP4/8/k7/8/K7 w - c6 0 2").unwrap();
-        let mut board = Bitboard::new(&fen);
+        let mut board = Bitboard::from_fen_string_unchecked("8/8/8/1PpP4/8/k7/8/K7 w - c6 0 2");
 
         assert_eq!(board.uci_to_pgn("d5c6"), Ok("dxc6".to_string()));
         assert_eq!(board.uci_to_pgn("b5c6"), Ok("bxc6".to_string()));
@@ -1599,8 +1647,7 @@ mod tests {
 
     #[test]
     fn test_pgn4() {
-        let fen = Fen::new("1Q6/8/8/8/8/k1K1B3/8/8 w - - 0 1").unwrap();
-        let mut board = Bitboard::new(&fen);
+        let mut board = Bitboard::from_fen_string_unchecked("1Q6/8/8/8/8/k1K1B3/8/8 w - - 0 1");
 
         assert_eq!(board.uci_to_pgn("b8a8"), Ok("Qa8#".to_string()));
         assert_eq!(board.uci_to_pgn("e3c5"), Ok("Bc5+".to_string()));
@@ -1608,8 +1655,7 @@ mod tests {
 
     #[test]
     fn test_pgn5() {
-        let fen = Fen::new("1q6/8/8/8/8/K1k1b3/8/8 b - - 0 1").unwrap();
-        let mut board = Bitboard::new(&fen);
+        let mut board = Bitboard::from_fen_string_unchecked("1q6/8/8/8/8/K1k1b3/8/8 b - - 0 1");
 
         assert_eq!(board.uci_to_pgn("b8a8"), Ok("Qa8#".to_string()));
         assert_eq!(board.uci_to_pgn("e3c5"), Ok("Bc5+".to_string()));
@@ -1617,8 +1663,7 @@ mod tests {
 
     #[test]
     fn test_pgn_castle_white() {
-        let fen = Fen::new("r3k2r/8/8/8/8/8/8/R3K2R w KQkq - 0 1").unwrap();
-        let mut board = Bitboard::new(&fen);
+        let mut board = Bitboard::from_fen_string_unchecked("r3k2r/8/8/8/8/8/8/R3K2R w KQkq - 0 1");
 
         assert_eq!(board.uci_to_pgn("e1g1"), Ok("O-O".to_string()));
         assert_eq!(board.uci_to_pgn("e1c1"), Ok("O-O-O".to_string()));
@@ -1626,16 +1671,14 @@ mod tests {
 
     #[test]
     fn test_pgn_castle_white_to_mate() {
-        let fen = Fen::new("8/8/8/8/8/8/7R/k3K2R w K - 0 1").unwrap();
-        let mut board = Bitboard::new(&fen);
+        let mut board = Bitboard::from_fen_string_unchecked("8/8/8/8/8/8/7R/k3K2R w K - 0 1");
 
         assert_eq!(board.uci_to_pgn("e1g1"), Ok("O-O#".to_string()));
     }
 
     #[test]
     fn test_pgn_castle_black() {
-        let fen = Fen::new("r3k2r/8/8/8/8/8/8/R3K2R b KQkq - 0 1").unwrap();
-        let mut board = Bitboard::new(&fen);
+        let mut board = Bitboard::from_fen_string_unchecked("r3k2r/8/8/8/8/8/8/R3K2R b KQkq - 0 1");
 
         assert_eq!(board.uci_to_pgn("e8g8"), Ok("O-O".to_string()));
         assert_eq!(board.uci_to_pgn("e8c8"), Ok("O-O-O".to_string()));
@@ -1651,41 +1694,37 @@ mod tests {
             "rnbqkbnr/pp1ppppp/8/2p5/4P3/5N2/PPPP1PPP/RNBQKB1R b - - 1 2",
         ];
 
-        for x in fens {
-            let expected = Fen::new(x).unwrap();
-            let actual = Bitboard::new(&expected).fen();
+        for fen_string in fens {
+            let expected = Fen::new(fen_string).unwrap();
+            let actual: Fen = Bitboard::from(&expected).into();
             assert_eq!(actual, expected);
         }
     }
 
     #[test]
     fn test_black_in_check() {
-        let fen_in_check = Fen::new("Q7/8/8/k1K5/8/8/8/8 b - - 2 1").unwrap();
-        let board = Bitboard::new(&fen_in_check);
+        let board = Bitboard::from_fen_string_unchecked("Q7/8/8/k1K5/8/8/8/8 b - - 2 1");
 
         assert!(board.is_current_in_check())
     }
 
     #[test]
     fn test_white_in_check() {
-        let fen_in_check = Fen::new("q7/8/8/K1k5/8/8/8/8 w - - 1 1").unwrap();
-        let board = Bitboard::new(&fen_in_check);
+        let board = Bitboard::from_fen_string_unchecked("q7/8/8/K1k5/8/8/8/8 w - - 1 1");
 
         assert!(board.is_current_in_check())
     }
 
     #[test]
     fn test_black_not_in_check() {
-        let fen_in_check = Fen::new("1Q6/8/8/k1K5/8/8/8/8 b - - 2 1").unwrap();
-        let board = Bitboard::new(&fen_in_check);
+        let board = Bitboard::from_fen_string_unchecked("1Q6/8/8/k1K5/8/8/8/8 b - - 2 1");
 
         assert!(!board.is_current_in_check())
     }
 
     #[test]
     fn test_white_not_in_check() {
-        let fen_in_check = Fen::new("1q6/8/8/K1k5/8/8/8/8 w - - 1 1").unwrap();
-        let board = Bitboard::new(&fen_in_check);
+        let board = Bitboard::from_fen_string_unchecked("1q6/8/8/K1k5/8/8/8/8 w - - 1 1");
 
         assert!(!board.is_current_in_check())
     }

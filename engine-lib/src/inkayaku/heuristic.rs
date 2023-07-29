@@ -255,7 +255,7 @@ mod test {
 
     #[test]
     fn test_neutral_psv() {
-        let bitboard = Bitboard::new(&FEN_STARTPOS);
+        let bitboard = Bitboard::default();
         let sut = SimpleHeuristic {};
         let actual_psv = sut.piece_square_value(&bitboard);
         assert_eq!(actual_psv, 0);
@@ -263,7 +263,7 @@ mod test {
 
     #[test]
     fn evaluate() {
-        println!("{}", SimpleHeuristic {}.evaluate(&Bitboard::new(&Fen::new("rn2k2r/ppp2ppp/8/3pPP2/3P1q2/P1KB4/P1P4P/3R2N1 b kq - 0 14").unwrap()), true));
-        println!("{}", SimpleHeuristic {}.evaluate(&Bitboard::new(&Fen::new("rn2k2r/ppp2ppp/8/3pPP2/3P1q2/P1KB4/P1P4P/3R2N1 w kq - 0 14").unwrap()), true));
+        println!("{}", SimpleHeuristic {}.evaluate(&Bitboard::from_fen_string_unchecked("rn2k2r/ppp2ppp/8/3pPP2/3P1q2/P1KB4/P1P4P/3R2N1 b kq - 0 14"), true));
+        println!("{}", SimpleHeuristic {}.evaluate(&Bitboard::from_fen_string_unchecked("rn2k2r/ppp2ppp/8/3pPP2/3P1q2/P1KB4/P1P4P/3R2N1 w kq - 0 14"), true));
     }
 }

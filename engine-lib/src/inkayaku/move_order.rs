@@ -42,7 +42,7 @@ mod tests {
     #[test]
     #[ignore]
     fn print_move_order() {
-        let mut bitboard = Bitboard::new(&Fen::new("k7/8/8/8/5q2/6Pp/7Q/K7 w - - 0 1").unwrap());
+        let mut bitboard = Bitboard::from_fen_string_unchecked("k7/8/8/8/5q2/6Pp/7Q/K7 w - - 0 1");
         let mut moves = bitboard.generate_legal_moves();
 
         let order = MvvLvaMoveOrder {};

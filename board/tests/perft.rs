@@ -123,7 +123,7 @@ mod perft_debug {
     #[test]
     #[ignore]
     fn print_moves() {
-        let mut bitboard = Bitboard::new(&Fen::new("4k3/8/8/8/8/8/8/R3K2R w KQ - 0 1").unwrap());
+        let mut bitboard = Bitboard::from_fen_string_unchecked("4k3/8/8/8/8/8/8/R3K2R w KQ - 0 1");
 
         let mut moves = Vec::new();
         bitboard.generate_pseudo_legal_moves_with_buffer(&mut moves);
@@ -146,8 +146,7 @@ mod perft_debug {
             return;
         }
 
-        let fen = &Fen::new(fen_str).unwrap();
-        let mut bitboard = Bitboard::new(fen);
+        let mut bitboard = Bitboard::from_fen_string_unchecked(fen_str);
 
         let moves = bitboard.perft(depth);
         let actual: HashSet<(String, u64)> = HashSet::from_iter(moves.iter().map(|t| (t.0.to_uci_string(), t.1)));
@@ -221,8 +220,8 @@ mod perft_debug {
     #[test]
     #[ignore]
     fn simple() {
-        let fen = Fen::new("r3k2r/p1ppqpb1/bnN1pnp1/3P4/1p2P3/2N2Q1p/PPPBBPPP/R3K2R b KQkq - 1 1").unwrap();
-        Bitboard::new(&fen).generate_pseudo_legal_moves_with_buffer(&mut Vec::new());
+        Bitboard::from_fen_string_unchecked("r3k2r/p1ppqpb1/bnN1pnp1/3P4/1p2P3/2N2Q1p/PPPBBPPP/R3K2R b KQkq - 1 1")
+            .generate_pseudo_legal_moves_with_buffer(&mut Vec::new());
     }
 }
 
@@ -367,8 +366,7 @@ mod perft {
     }
 
     fn run_perft(fen_string: &str, expect: &[PerftResult]) {
-        let fen = Fen::new(fen_string).unwrap();
-        let mut board = Bitboard::new(&fen);
+        let mut board = Bitboard::from_fen_string_unchecked(fen_string);
 
         let n = expect.iter().filter(|result| result.nodes < LIMIT).count();
         let actual =

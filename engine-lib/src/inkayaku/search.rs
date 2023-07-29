@@ -68,7 +68,7 @@ impl<T: UciTx, H: Heuristic, M: MoveOrder> Search<T, H, M> {
     }
 
     fn set_position_from(&mut self, fen: Fen, moves: Vec<UciMove>) {
-        let mut board = Bitboard::new(&fen);
+        let mut board = Bitboard::from(&fen);
         let mut zobrist_history = ZobristHistory::default();
         zobrist_history.set(board.ply_clock(), board.calculate_zobrist_hash());
 
