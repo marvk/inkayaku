@@ -7,12 +7,10 @@ use crate::board::constants::SquareShiftBits;
 
 pub struct Nonmagics([u64; 64]);
 
-lazy_static! {
-    pub static ref KING_NONMAGICS: Nonmagics = Nonmagics::new(&Direction::CARDINAL_DIRECTIONS);
-    pub static ref KNIGHT_NONMAGICS: Nonmagics = Nonmagics::new(&Direction::KNIGHT_DIRECTIONS);
-    pub static ref WHITE_PAWN_NONMAGICS: Nonmagics = Nonmagics::new(&[Direction::NORTH_WEST, Direction::NORTH_EAST]);
-    pub static ref BLACK_PAWN_NONMAGICS: Nonmagics = Nonmagics::new(&[Direction::SOUTH_WEST, Direction::SOUTH_EAST]);
-}
+pub const KING_NONMAGICS: Nonmagics = Nonmagics::new(&Direction::CARDINAL_DIRECTIONS);
+pub const KNIGHT_NONMAGICS: Nonmagics = Nonmagics::new(&Direction::KNIGHT_DIRECTIONS);
+pub const WHITE_PAWN_NONMAGICS: Nonmagics = Nonmagics::new(&[Direction::NORTH_WEST, Direction::NORTH_EAST]);
+pub const BLACK_PAWN_NONMAGICS: Nonmagics = Nonmagics::new(&[Direction::SOUTH_WEST, Direction::SOUTH_EAST]);
 
 impl Nonmagics {
     #[inline(always)]
@@ -20,23 +18,34 @@ impl Nonmagics {
         self.0[square as usize]
     }
 
-    fn new(directions: &[Direction]) -> Nonmagics {
-        let attack_occupations =
-            (0..64)
-                .map(|square_shift| Self::attack_occupations(square_shift, directions))
-                .collect::<Vec<_>>()
-                .try_into()
-                .unwrap();
+    const fn new(directions: &[Direction]) -> Self {
+        let mut result = [0; 64];
 
-        Nonmagics(attack_occupations)
+        let mut square_shift = 0;
+        while square_shift < 64 {
+            result[square_shift] = Self::attack_occupations(square_shift, directions);
+
+            square_shift += 1;
+        }
+
+        Self(result)
     }
 
-    fn attack_occupations(square_shift: usize, directions: &[Direction]) -> u64 {
+    const fn attack_occupations(square_shift: usize, directions: &[Direction]) -> u64 {
         let square = Square::SQUARES[square_shift];
 
-        directions
-            .iter()
-            .filter_map(|direction| square.translate(direction))
-            .fold(0_u64, |acc, square| { acc | square.mask })
+
+        let mut result: u64 = 0;
+
+        let mut i = 0;
+        while i < directions.len() {
+            if let Some(square) = square.translate(&directions[i]) {
+                result |= square.mask;
+            }
+
+            i += 1;
+        }
+
+        result
     }
 }

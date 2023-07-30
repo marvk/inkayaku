@@ -349,7 +349,7 @@ impl Bitboard {
     }
 
     fn pawn_attacks(&self, result: &mut Vec<Move>, mut pawn_occupancy: OccupancyBits, active_occupancy: OccupancyBits, passive_occupancy: OccupancyBits) {
-        let pawn_attacks: &Nonmagics = if self.is_white_turn() { &WHITE_PAWN_NONMAGICS } else { &BLACK_PAWN_NONMAGICS };
+        let pawn_attacks = if self.is_white_turn() { WHITE_PAWN_NONMAGICS } else { BLACK_PAWN_NONMAGICS };
 
         while pawn_occupancy != 0 {
             let (source_square_mask, source_square_shift) = mask_and_shift_from_lowest_one_bit(pawn_occupancy);
