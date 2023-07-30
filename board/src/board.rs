@@ -12,8 +12,8 @@ use marvk_chess_core::fen::{Fen, FenParseError};
 use crate::{mask_and_shift_from_lowest_one_bit, opposite_color, piece_to_string, square_to_string};
 use crate::board::constants::*;
 use crate::board::MoveFromUciError::{MoveDoesNotExist, MoveIsNotValid};
-use crate::board::precalculated::magic::{BISHOP_MAGICS, Magics, ROOK_MAGICS};
-use crate::board::precalculated::nonmagic::{BLACK_PAWN_NONMAGICS, KING_NONMAGICS, KNIGHT_NONMAGICS, Nonmagics, WHITE_PAWN_NONMAGICS};
+use crate::board::precalculated::magic::{BISHOP_MAGICS, Magics, ROOK_MAGICS, UnsafeMagicsExt};
+use crate::board::precalculated::nonmagic::{BLACK_PAWN_NONMAGICS, KING_NONMAGICS, KNIGHT_NONMAGICS, Nonmagics, UnsafeNonmagicsExt, WHITE_PAWN_NONMAGICS};
 use crate::board::zobrist::Zobrist;
 
 pub mod constants;
@@ -1535,6 +1535,7 @@ impl Display for Bitboard {
 #[cfg(test)]
 mod tests {
     use std::str::FromStr;
+
     use rand::prelude::{SliceRandom, StdRng};
     use rand::SeedableRng;
 
