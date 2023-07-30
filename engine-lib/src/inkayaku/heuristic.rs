@@ -4,6 +4,7 @@ use marvk_chess_uci::uci::Score;
 use marvk_chess_uci::uci::Score::{Centipawn, Mate};
 
 pub mod simple;
+pub mod improved;
 
 pub trait Heuristic {
     const MAX_FULL_MOVES: i32 = 1 << 20;
@@ -118,4 +119,10 @@ impl PieceCounts {
             black: PieceCount::count_from(&bitboard.black),
         }
     }
+
+    fn pawns(&self) -> u32 { self.white.pawns + self.black.pawns }
+    fn knights(&self) -> u32 { self.white.knights + self.black.knights }
+    fn bishops(&self) -> u32 { self.white.bishops + self.black.bishops }
+    fn rooks(&self) -> u32 { self.white.rooks + self.black.rooks }
+    fn queens(&self) -> u32 { self.white.queens + self.black.queens }
 }
