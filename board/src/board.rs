@@ -1332,7 +1332,7 @@ impl FenParseExt for Fen {
         self.get_piece_placement().split('/').enumerate().for_each(|(rank_index, file)| {
             let mut file_index = 0;
 
-            file.chars().into_iter().for_each(|c| {
+            file.chars().for_each(|c| {
                 if c.is_ascii_digit() {
                     file_index += c.to_digit(10).unwrap()
                 } else {

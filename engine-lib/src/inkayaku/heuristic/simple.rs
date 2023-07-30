@@ -1,8 +1,6 @@
 use marvk_chess_board::board::{Bitboard, PlayerState};
 use marvk_chess_board::board::constants::{BISHOP, GameStageBits, KING, KNIGHT, LATE, MID, OccupancyBits, PAWN, QUEEN, ROOK, WHITE};
 use marvk_chess_board::mask_and_shift_from_lowest_one_bit;
-use marvk_chess_uci::uci::Score;
-use marvk_chess_uci::uci::Score::Mate;
 use crate::inkayaku::heuristic::{Heuristic, mirror_and_flip_sign};
 
 const QUEEN_VALUE: u32 = 900;
@@ -183,8 +181,7 @@ mod test {
     #[test]
     fn test_neutral_psv() {
         let bitboard = Bitboard::default();
-        let sut = SimpleHeuristic {};
-        let actual_psv = sut.piece_square_value(&bitboard);
+        let actual_psv = SimpleHeuristic::piece_square_value(&bitboard);
         assert_eq!(actual_psv, 0);
     }
 

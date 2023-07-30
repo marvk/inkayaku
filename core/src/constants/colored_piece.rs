@@ -31,14 +31,14 @@ impl ColoredPiece {
     pub const WHITE_KING: Self = Self { color: Color::WHITE, piece: Piece::KING, fen: 'K', utf8_piece: '♔' };
     pub const BLACK_KING: Self = Self { color: Color::BLACK, piece: Piece::KING, fen: 'k', utf8_piece: '♚' };
 
-    pub const COLORED_PIECES: [Self; 12] = [Self::WHITE_PAWN, Self::BLACK_PAWN, Self::WHITE_KNIGHT, Self::BLACK_KNIGHT, Self::WHITE_BISHOP, Self::BLACK_BISHOP, Self::WHITE_ROOK, Self::BLACK_ROOK, Self::WHITE_QUEEN, Self::BLACK_QUEEN, Self::WHITE_KING, Self::BLACK_KING, ];
+    pub const VALUES: [Self; 12] = [Self::WHITE_PAWN, Self::BLACK_PAWN, Self::WHITE_KNIGHT, Self::BLACK_KNIGHT, Self::WHITE_BISHOP, Self::BLACK_BISHOP, Self::WHITE_ROOK, Self::BLACK_ROOK, Self::WHITE_QUEEN, Self::BLACK_QUEEN, Self::WHITE_KING, Self::BLACK_KING, ];
 
     pub fn name(&self) -> String {
         format!("{} {}", self.color.name, self.piece.name)
     }
 
     pub fn by_index<'a>(color_index: usize, piece_index: usize) -> &'a ColoredPiece {
-        &Self::COLORED_PIECES[color_index + piece_index * 2 - 2]
+        &Self::VALUES[color_index + piece_index * 2 - 2]
     }
 
     pub fn by<'a>(color: Color, piece: Piece) -> &'a ColoredPiece {

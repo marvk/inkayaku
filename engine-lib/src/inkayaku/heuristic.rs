@@ -21,7 +21,7 @@ pub trait Heuristic {
     }
     fn evaluate(&self, bitboard: &Bitboard, legal_moves_remaining: bool) -> i32 {
         if legal_moves_remaining {
-            if bitboard.halfmove_clock >= Self::MAX_HALF_MOVES as u32 {
+            if bitboard.halfmove_clock >= Self::MAX_HALF_MOVES {
                 self.draw_score()
             } else {
                 self.evaluate_ongoing(bitboard)

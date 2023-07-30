@@ -23,10 +23,7 @@ impl Nonmagics {
     fn new(directions: &[Direction]) -> Nonmagics {
         let attack_occupations =
             (0..64)
-                .into_iter()
-                .map(|square_shift| {
-                    Self::attack_occupations(square_shift, directions)
-                })
+                .map(|square_shift| Self::attack_occupations(square_shift, directions))
                 .collect::<Vec<_>>()
                 .try_into()
                 .unwrap();

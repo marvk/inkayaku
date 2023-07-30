@@ -37,7 +37,7 @@ impl<T: UciTx + Send + Sync + 'static> Inkayaku<T> {
 
     fn start_search_thread(search_rx: Receiver<SearchMessage>, uci_tx: Arc<T>, debug: bool) -> JoinHandle<()> {
         thread::spawn(move || {
-            Search::new(uci_tx, search_rx, SimpleHeuristic::default(), MvvLvaMoveOrder::default(), EngineOptions { debug, ..EngineOptions::default() }).idle();
+            Search::new(uci_tx, search_rx, SimpleHeuristic, MvvLvaMoveOrder, EngineOptions { debug, ..EngineOptions::default() }).idle();
         })
     }
 }

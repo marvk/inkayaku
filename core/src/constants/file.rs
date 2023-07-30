@@ -15,9 +15,9 @@ impl File {
     pub const FILE_G: Self = Self { fen: 'g', index: 6 };
     pub const FILE_H: Self = Self { fen: 'h', index: 7 };
 
-    pub const FILES: [Self; 8] = [Self::FILE_H, Self::FILE_G, Self::FILE_F, Self::FILE_E, Self::FILE_D, Self::FILE_C, Self::FILE_B, Self::FILE_A, ];
+    pub const VALUES: [Self; 8] = [Self::FILE_H, Self::FILE_G, Self::FILE_F, Self::FILE_E, Self::FILE_D, Self::FILE_C, Self::FILE_B, Self::FILE_A, ];
 
     pub fn by_index<'a>(index: usize) -> &'a Self {
-        &Self::FILES[index]
+        &Self::VALUES[index]
     }
 }

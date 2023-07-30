@@ -371,7 +371,6 @@ mod perft {
         let n = expect.iter().filter(|result| result.nodes < LIMIT).count();
         let actual =
             (1..=n)
-                .into_iter()
                 .map(|index| {
                     let mut result = PerftResult::new();
                     _run_perft_recursive(&mut board, &mut result, &mut Vec::new(), index);

@@ -125,7 +125,7 @@ impl Square {
         Self::by_indices(file, rank)
     }
 
-    pub fn by_indices(file_index: usize, rank_index: usize) -> Option<Self> {
+    pub const fn by_indices(file_index: usize, rank_index: usize) -> Option<Self> {
         if file_index > 7 || rank_index > 7 {
             return None;
         }
@@ -133,7 +133,7 @@ impl Square {
         Self::by_index(to_square_index_from_indices(file_index, rank_index))
     }
 
-    pub fn by_index(index: usize) -> Option<Square> {
+    pub const fn by_index(index: usize) -> Option<Square> {
         match index {
             0 => Some(Self::A8),
             1 => Some(Self::B8),
@@ -207,9 +207,9 @@ impl Square {
         Self::by_indices(file.index as usize, rank.index as usize).unwrap()
     }
 
-    pub fn translate(&self, direction: &Direction) -> Option<Square> {
-        let file = self.file.index as i32 + direction.d_file as i32;
-        let rank = self.rank.index as i32 + direction.d_rank as i32;
+    pub const fn translate(&self, direction: &Direction) -> Option<Square> {
+        let file = self.file.index as i32 + direction.d_file;
+        let rank = self.rank.index as i32 + direction.d_rank;
 
         if file < 0 || rank < 0 {
             None

@@ -68,15 +68,7 @@ impl<const N: usize> TranspositionTable for ArrayTranspositionTable<N> {
 
     fn get(&self, zobrist_hash: ZobristHash) -> Option<&TtEntry> {
         let array_hash = Self::array_hash(zobrist_hash);
-        if let Some(entry) = &self.entries[array_hash] {
-            if entry.zobrist_hash == zobrist_hash {
-                Some(entry)
-            } else {
-                None
-            }
-        } else {
-            None
-        }
+        self.entries[array_hash].as_ref().filter(|entry| entry.zobrist_hash == zobrist_hash)
     }
 
     fn len(&self) -> usize {

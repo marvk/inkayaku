@@ -176,7 +176,6 @@ pub mod perft {
         let n = expect.len();
         let actual =
             (1..=n)
-                .into_iter()
                 .map(|index| {
                     let mut result = PerftResult::new();
                     run_perft_recursive(&mut board, &mut result, &mut Vec::new(), index);
