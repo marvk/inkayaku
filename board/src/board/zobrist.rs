@@ -28,7 +28,7 @@ impl Zobrist {
     pub const BLACK_QUEEN_CASTLE_HASH: ZobristHash = 0xe6d1cdeac4ec0b8a;
     pub const BLACK_TO_MOVE_HASH: ZobristHash = 0xaa56513abd96ba3;
 
-    const CASTLE_HASHES: [[u64; 2]; 2] = [
+    const CASTLE_HASHES: [[ZobristHash; 2]; 2] = [
         [Self::WHITE_QUEEN_CASTLE_HASH, Self::WHITE_KING_CASTLE_HASH],
         [Self::BLACK_QUEEN_CASTLE_HASH, Self::BLACK_KING_CASTLE_HASH]
     ];
@@ -56,7 +56,7 @@ mod test {
     use rand::{Rng, SeedableRng};
     use rand::rngs::StdRng;
 
-    use crate::board::constants::{BLACK, KING, QUEEN, WHITE};
+    use crate::board::constants::{BLACK, KING, QUEEN, WHITE, ZobristHash};
     use crate::board::zobrist::Zobrist;
 
     #[test]
@@ -73,7 +73,7 @@ mod test {
         let mut hashes = HashSet::new();
         let mut rng: StdRng = SeedableRng::from_seed([0; 32]);
 
-        let mut gen_single = || -> u64 {
+        let mut gen_single = || -> ZobristHash {
             loop {
                 let next = rng.gen();
                 if hashes.insert(next) {
@@ -82,7 +82,7 @@ mod test {
             };
         };
 
-        let mut gen_64 = || -> [u64; 64] {
+        let mut gen_64 = || -> [ZobristHash; 64] {
             let mut result = [0; 64];
             for i in 0..64 {
                 result[i] = gen_single();

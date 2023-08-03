@@ -625,7 +625,7 @@ impl Bitboard {
         result.push(mv);
     }
 
-    const PIECE_VALUES: [i32; 7] = [0, 100, 320, 330, 500, 900, 901, ];
+    const PIECE_VALUES: [i32; 7] = [0, 100, 320, 330, 500, 900, 901];
 
     /// Returns a value in `0..=230300`
     fn mvv_lva(piece_active: PieceBits, piece_attacked: PieceBits) -> i32 {

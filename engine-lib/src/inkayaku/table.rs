@@ -19,7 +19,7 @@ impl<V> HashTable<ZobristHash, V> {
     }
 
     fn clear(&mut self) {
-        // self.entry_list.clear();
+        self.entry_list.clear();
         self.entry_map.clear();
     }
 
