@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 use std::io::Read;
 
-use crate::reader::PgnParserError::ReadingFromClosedRead;
+use crate::reader::PgnRawParserError::ReadingFromClosedRead;
 
 #[derive(Debug)]
 pub struct PgnRawAnnotatedMove {
@@ -27,7 +27,7 @@ impl PgnRaw {
     }
 }
 
-pub struct PgnParser<R: Read> {
+pub struct PgnRawParser<R: Read> {
     reader: R,
     chunk_size: usize,
     eof_reached: bool,
@@ -37,13 +37,13 @@ pub struct PgnParser<R: Read> {
 }
 
 #[derive(Debug)]
-pub enum PgnParserError {
+pub enum PgnRawParserError {
     ReadingFromClosedRead,
     IllegalConsume { position: u64, expected: u8, actual: u8 },
     IllegalSymbol { position: u64, actual: u8 },
 }
 
-impl<R: Read> PgnParser<R> {
+impl<R: Read> PgnRawParser<R> {
     pub fn new(reader: R) -> Self {
         Self::with_chunk_size(reader, 8192)
     }
@@ -75,7 +75,7 @@ impl<R: Read> PgnParser<R> {
         true
     }
 
-    fn peek_byte(&mut self) -> Result<u8, PgnParserError> {
+    fn peek_byte(&mut self) -> Result<u8, PgnRawParserError> {
         if self.ensure_buffer() {
             Ok(self.current_buffer[self.current_byte])
         } else {
@@ -83,13 +83,13 @@ impl<R: Read> PgnParser<R> {
         }
     }
 
-    fn pop_byte(&mut self) -> Result<u8, PgnParserError> {
+    fn pop_byte(&mut self) -> Result<u8, PgnRawParserError> {
         let result = self.peek_byte()?;
         self.increment_byte();
         Ok(result)
     }
 
-    fn skip_byte(&mut self) -> Result<(), PgnParserError> {
+    fn skip_byte(&mut self) -> Result<(), PgnRawParserError> {
         if self.ensure_buffer() {
             self.increment_byte();
             Ok(())
@@ -103,16 +103,16 @@ impl<R: Read> PgnParser<R> {
         self.position += 1;
     }
 
-    fn consume(&mut self, expected: u8) -> Result<(), PgnParserError> {
+    fn consume(&mut self, expected: u8) -> Result<(), PgnRawParserError> {
         let actual = self.pop_byte()?;
         if actual == expected {
             Ok(())
         } else {
-            Err(PgnParserError::IllegalConsume { position: self.position, expected, actual })
+            Err(PgnRawParserError::IllegalConsume { position: self.position, expected, actual })
         }
     }
 
-    fn skip_blank_lines(&mut self) -> Result<(), PgnParserError> {
+    fn skip_blank_lines(&mut self) -> Result<(), PgnRawParserError> {
         while self.peek_byte()? == b'\n' {
             self.skip_byte()?;
         }
@@ -120,7 +120,7 @@ impl<R: Read> PgnParser<R> {
         Ok(())
     }
 
-    fn skip_blank_lines_and_spaces(&mut self) -> Result<(), PgnParserError> {
+    fn skip_blank_lines_and_spaces(&mut self) -> Result<(), PgnRawParserError> {
         while self.peek_byte()? == b'\n' || self.peek_byte()? == b' ' {
             self.skip_byte()?;
         }
@@ -128,7 +128,7 @@ impl<R: Read> PgnParser<R> {
         Ok(())
     }
 
-    fn skip_spaces(&mut self) -> Result<(), PgnParserError> {
+    fn skip_spaces(&mut self) -> Result<(), PgnRawParserError> {
         while self.peek_byte()? == b' ' {
             self.skip_byte()?;
         }
@@ -136,13 +136,13 @@ impl<R: Read> PgnParser<R> {
         Ok(())
     }
 
-    fn skip_to_next_line(&mut self) -> Result<(), PgnParserError> {
+    fn skip_to_next_line(&mut self) -> Result<(), PgnRawParserError> {
         while self.pop_byte()? != b'\n' {};
 
         Ok(())
     }
 
-    fn read_until(&mut self, byte: u8) -> Result<String, PgnParserError> {
+    fn read_until(&mut self, byte: u8) -> Result<String, PgnRawParserError> {
         let mut result = String::new();
         let mut cur_byte = self.peek_byte()?;
 
@@ -155,7 +155,7 @@ impl<R: Read> PgnParser<R> {
         Ok(result)
     }
 
-    fn read_tag_pairs(&mut self) -> Result<HashMap<String, String>, PgnParserError> {
+    fn read_tag_pairs(&mut self) -> Result<HashMap<String, String>, PgnRawParserError> {
         let mut result = HashMap::new();
 
         loop {
@@ -165,12 +165,12 @@ impl<R: Read> PgnParser<R> {
                     result.insert(k, v);
                 }
                 b'\n' => { return Ok(result); }
-                other => { return Err(PgnParserError::IllegalSymbol { position: self.position, actual: other }); }
+                other => { return Err(PgnRawParserError::IllegalSymbol { position: self.position, actual: other }); }
             }
         }
     }
 
-    fn read_tag_pair_line(&mut self) -> Result<(String, String), PgnParserError> {
+    fn read_tag_pair_line(&mut self) -> Result<(String, String), PgnRawParserError> {
         self.consume(b'[')?;
         let name = self.read_tag_name()?;
         self.consume(b' ')?;
@@ -180,18 +180,18 @@ impl<R: Read> PgnParser<R> {
         Ok((name, value))
     }
 
-    fn read_tag_name(&mut self) -> Result<String, PgnParserError> {
+    fn read_tag_name(&mut self) -> Result<String, PgnRawParserError> {
         self.read_until(b' ')
     }
 
-    fn read_tag_value(&mut self) -> Result<String, PgnParserError> {
+    fn read_tag_value(&mut self) -> Result<String, PgnRawParserError> {
         self.consume(b'"')?;
         let value = self.read_until(b'"');
         self.consume(b'"')?;
         value
     }
 
-    fn read_moves(&mut self) -> Result<Vec<PgnRawAnnotatedMove>, PgnParserError> {
+    fn read_moves(&mut self) -> Result<Vec<PgnRawAnnotatedMove>, PgnRawParserError> {
         let mut result = Vec::new();
 
         while let Some(mv) = self.read_move()? {
@@ -203,7 +203,7 @@ impl<R: Read> PgnParser<R> {
         Ok(result)
     }
 
-    fn read_move(&mut self) -> Result<Option<PgnRawAnnotatedMove>, PgnParserError> {
+    fn read_move(&mut self) -> Result<Option<PgnRawAnnotatedMove>, PgnRawParserError> {
         self.skip_blank_lines_and_spaces()?;
 
         let token = self.read_until(b' ')?;
@@ -238,21 +238,21 @@ impl<R: Read> PgnParser<R> {
         Ok(Some(PgnRawAnnotatedMove::new(mv, annotation)))
     }
 
-    fn read_braced_annotation(&mut self) -> Result<String, PgnParserError> {
+    fn read_braced_annotation(&mut self) -> Result<String, PgnRawParserError> {
         self.consume(b'{')?;
         let result = self.read_until(b'}');
         self.consume(b'}')?;
         result
     }
 
-    fn read_semicolon_annotation(&mut self) -> Result<String, PgnParserError> {
+    fn read_semicolon_annotation(&mut self) -> Result<String, PgnRawParserError> {
         self.consume(b';')?;
         let result = self.read_until(b'\n');
         self.consume(b'\n')?;
         result
     }
 
-    fn read_pgn(&mut self) -> Result<PgnRaw, PgnParserError> {
+    fn read_pgn(&mut self) -> Result<PgnRaw, PgnRawParserError> {
         let tag_pairs = self.read_tag_pairs()?;
 
         self.skip_blank_lines()?;
@@ -265,8 +265,8 @@ impl<R: Read> PgnParser<R> {
     }
 }
 
-impl<R: Read> Iterator for PgnParser<R> {
-    type Item = Result<PgnRaw, PgnParserError>;
+impl<R: Read> Iterator for PgnRawParser<R> {
+    type Item = Result<PgnRaw, PgnRawParserError>;
 
     fn next(&mut self) -> Option<Self::Item> {
         match self.skip_blank_lines_and_spaces() {

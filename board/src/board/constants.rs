@@ -14,6 +14,7 @@ pub type GameStageBits = usize;
 
 pub const WHITE: ColorBits = 0;
 pub const BLACK: ColorBits = 1;
+pub const DRAW: ColorBits = 2;
 
 // MSB . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . LSB
 //
