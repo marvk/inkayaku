@@ -19,18 +19,20 @@ pub struct ConsoleUciTx<FConsumer: Fn(&str), FDebugConsumer: Fn(&str)> {
 }
 
 impl<FConsumer: Fn(&str), FDebugConsumer: Fn(&str)> ConsoleUciTx<FConsumer, FDebugConsumer> {
-    pub fn new(consumer: FConsumer, error_consumer: FDebugConsumer, debug: bool) -> Self {
+    pub const fn new(consumer: FConsumer, error_consumer: FDebugConsumer, debug: bool) -> Self {
         Self { consumer, debug_consumer: error_consumer, debug: Mutex::new(debug) }
     }
 
+    #[allow(clippy::unwrap_used)]
     pub fn set_debug(&self, debug: bool) {
         *self.debug.lock().unwrap() = debug;
     }
 
     fn tx(&self, message: &str) {
-        (self.consumer)(message)
+        (self.consumer)(message);
     }
 
+    #[allow(clippy::unwrap_used)]
     fn tx_debug(&self, message: &str) {
         if *self.debug.lock().unwrap() {
             (self.debug_consumer)(message);
@@ -38,63 +40,50 @@ impl<FConsumer: Fn(&str), FDebugConsumer: Fn(&str)> ConsoleUciTx<FConsumer, FDeb
     }
 
     fn tx_options(&self, name: &str, the_type: &str, remainder: &str) {
-        self.tx(format!("option name {} type {} {}", name, the_type, remainder).trim())
+        self.tx(format!("option name {} type {} {}", name, the_type, remainder).trim());
     }
 }
 
 impl<FConsumer: Fn(&str), FDebugConsumer: Fn(&str)> UciTx for ConsoleUciTx<FConsumer, FDebugConsumer> {
     fn id_name(&self, name: &str) {
-        if name.is_empty() {
-            panic!()
-        }
+        assert!(!name.is_empty());
 
-        self.tx(&format!("id name {}", name))
+        self.tx(&format!("id name {}", name));
     }
 
     fn id_author(&self, author: &str) {
-        if author.is_empty() {
-            panic!()
-        }
+        assert!(!author.is_empty());
 
-        self.tx(&format!("id author {}", author))
+        self.tx(&format!("id author {}", author));
     }
 
     fn uci_ok(&self) {
-        self.tx("uciok")
+        self.tx("uciok");
     }
 
     fn ready_ok(&self) {
-        self.tx("readyok")
+        self.tx("readyok");
     }
 
     fn best_move(&self, best_move: Option<UciMove>, ponder_move: Option<UciMove>) {
-        let move_string = match best_move {
-            Some(mv) => format!("{}", mv),
-            None => "0000".to_string(),
-        };
+        let move_string = best_move.map_or_else(|| "0000".to_string(), |mv| format!("{}", mv));
+        let ponder_string = ponder_move.map_or_else(String::new, |ponder_mv| format!(" ponder {}", ponder_mv));
 
-        let ponder_string = match ponder_move {
-            Some(ponder_mv) => format!(" ponder {}", ponder_mv),
-            None => "".to_string(),
-        };
-
-        self.tx(&format!("bestmove {}{}", move_string, ponder_string))
+        self.tx(&format!("bestmove {}{}", move_string, ponder_string));
     }
 
     fn copy_protection(&self, copy_protection: ProtectionMessage) {
-        self.tx(&format!("copyprotection {}", copy_protection))
+        self.tx(&format!("copyprotection {}", copy_protection));
     }
 
     fn registration(&self, registration: ProtectionMessage) {
-        self.tx(&format!("registration {}", registration))
+        self.tx(&format!("registration {}", registration));
     }
 
     fn info(&self, info: &Info) {
-        let mut msg = "info".to_string();
-
         fn append_maybe<T: Display>(accumulator: &mut String, key: &str, value: Option<T>) {
-            if value.is_some() {
-                accumulator.push_str(&format!(" {} {}", key, value.unwrap()))
+            if let Some(value) = value {
+                accumulator.push_str(&format!(" {} {}", key, value));
             }
         }
 
@@ -114,6 +103,8 @@ impl<FConsumer: Fn(&str), FDebugConsumer: Fn(&str)> UciTx for ConsoleUciTx<FCons
             format!("{} {}", current_line.cpu_number, move_array_to_string(&current_line.line))
         }
 
+        let mut msg = "info".to_string();
+
         append_maybe(&mut msg, "depth", info.depth);
         append_maybe(&mut msg, "seldepth", info.selective_depth);
         append_maybe(&mut msg, "time", info.time.map(|d| d.as_millis()));
@@ -132,15 +123,15 @@ impl<FConsumer: Fn(&str), FDebugConsumer: Fn(&str)> UciTx for ConsoleUciTx<FCons
         append_maybe(&mut msg, "currline", info.current_line.as_ref().map(current_line_to_string));
         append_maybe(&mut msg, "string", info.string.as_ref());
 
-        self.tx(&msg)
+        self.tx(&msg);
     }
 
     fn option_check(&self, name: &str, default: bool) {
-        self.tx_options(name, "check", &format!("default {}", default))
+        self.tx_options(name, "check", &format!("default {}", default));
     }
 
     fn option_spin(&self, name: &str, default: i32, min: i32, max: i32) {
-        self.tx_options(name, "spin", &format!("default {} min {} max {}", default, min, max))
+        self.tx_options(name, "spin", &format!("default {} min {} max {}", default, min, max));
     }
 
     fn option_combo(&self, name: &str, default: &str, vars: &[&str]) {
@@ -151,15 +142,15 @@ impl<FConsumer: Fn(&str), FDebugConsumer: Fn(&str)> UciTx for ConsoleUciTx<FCons
             vars_string.push_str(var);
         }
 
-        self.tx_options(name, "combo", &format!("default {}{}", default, vars_string))
+        self.tx_options(name, "combo", &format!("default {}{}", default, vars_string));
     }
 
     fn option_button(&self, name: &str) {
-        self.tx_options(name, "button", "")
+        self.tx_options(name, "button", "");
     }
 
     fn option_string(&self, name: &str, default: &str) {
-        self.tx_options(name, "string", &format!("default {}", default))
+        self.tx_options(name, "string", &format!("default {}", default));
     }
 
     fn debug(&self, message: &str) {
@@ -173,7 +164,7 @@ pub struct ConsoleUciRx<FRead: Fn() -> Result<String, IoError>, FOnCommand: Fn(R
 }
 
 impl<FRead: Fn() -> Result<String, IoError>, FOnCommand: Fn(Result<UciCommand, ConsoleUciRxError>)> ConsoleUciRx<FRead, FOnCommand> {
-    pub fn new(read: FRead, on_command: FOnCommand) -> Self {
+    pub const fn new(read: FRead, on_command: FOnCommand) -> Self {
         Self { read, on_command }
     }
 

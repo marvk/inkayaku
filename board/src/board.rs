@@ -1,4 +1,3 @@
-use std::char::from_digit;
 use std::fmt::{Debug, Display, Formatter};
 use std::str::FromStr;
 
@@ -24,9 +23,14 @@ pub mod constants;
 mod precalculated;
 mod zobrist;
 
+fn _construct_pgn_regex() -> Regex {
+    #[allow(clippy::unwrap_used)]
+    Regex::new("^(?:(?:(?P<piece>[BNRQK])?(?P<from_file>[a-h])?(?P<from_rank>[1-8])?(?P<takes>x)?(?P<target>[a-h][1-8])(?:=(?P<promotion>[BNRQ]))?)|(?P<castle>O-O(?P<long_castle>-O)?))(?P<check>[+#])?(?P<annotation>[!?]+)?$").unwrap()
+}
+
 lazy_static! {
 #[allow(clippy::unwrap_used)]
-    static ref PGN_REGEX: Regex = Regex::new("^(?:(?:(?P<piece>[BNRQK])?(?P<from_file>[a-h])?(?P<from_rank>[1-8])?(?P<takes>x)?(?P<target>[a-h][1-8])(?:=(?P<promotion>[BNRQ]))?)|(?P<castle>O-O(?P<long_castle>-O)?))(?P<check>[+#])?(?P<annotation>[!?]+)?$").unwrap();
+    static ref PGN_REGEX: Regex = _construct_pgn_regex();
 }
 
 #[derive(Eq, PartialEq, Hash, Copy, Clone, Default)]
@@ -128,12 +132,6 @@ impl Move {
     pub fn to_pgn_string(&self, board: &mut Bitboard) -> Result<String, MoveFromUciError> {
         board.uci_to_pgn(&self.to_uci_string())
     }
-
-    pub fn structs(&self) -> (Square, Square, Option<Piece>) {
-        (Square::by_index(self.get_source_square() as usize).unwrap(),
-         Square::by_index(self.get_target_square() as usize).unwrap(),
-         Piece::by_index(self.get_promotion_piece() as usize))
-    }
 }
 
 pub struct MoveStructs {
@@ -144,8 +142,10 @@ pub struct MoveStructs {
     pub promote_to: Option<Piece>,
 }
 
+#[allow(clippy::fallible_impl_from)]
 impl From<Move> for MoveStructs {
     fn from(mv: Move) -> Self {
+        #[allow(clippy::unwrap_used)]
         Self {
             from_square: Square::by_index(mv.get_source_square() as usize).unwrap(),
             to_square: Square::by_index(mv.get_target_square() as usize).unwrap(),
@@ -1275,7 +1275,7 @@ impl Bitboard {
                             }
                         }
 
-                        let target = square_shift_from_fen(target.as_str());
+                        let target = square_shift_from_fen_unchecked(target.as_str());
 
                         mv.get_target_square() == target
                     })
@@ -1347,7 +1347,7 @@ impl Bitboard {
                             }
                         }
 
-                        let target = square_shift_from_fen(target.as_str());
+                        let target = square_shift_from_fen_unchecked(target.as_str());
 
                         mv.get_target_square() == target
                     })
@@ -1373,6 +1373,7 @@ impl Bitboard {
         }
     }
 
+    #[allow(clippy::unwrap_used)]
     pub fn uci_to_pgn(&mut self, uci: &str) -> Result<String, MoveFromUciError> {
         let uci = uci.trim();
         let moves = self.generate_pseudo_legal_moves();
@@ -1499,6 +1500,7 @@ impl FenParseExt for Fen {
             let mut file_index = 0;
 
             for c in file.chars() {
+                #[allow(clippy::unwrap_used)]
                 if c.is_ascii_digit() {
                     file_index += c.to_digit(10).unwrap();
                 } else {
@@ -1535,8 +1537,10 @@ impl FenParseExt for Fen {
             _ => panic!(),
         }
     }
-    fn parse_en_passant_square_shift(&self) -> SquareShiftBits { if self.get_en_passant_target_square() == "-" { NO_SQUARE } else { square_shift_from_fen(self.get_en_passant_target_square()) } }
+    fn parse_en_passant_square_shift(&self) -> SquareShiftBits { if self.get_en_passant_target_square() == "-" { NO_SQUARE } else { square_shift_from_fen_unchecked(self.get_en_passant_target_square()) } }
+    #[allow(clippy::unwrap_used)]
     fn parse_fullmove_clock(&self) -> u32 { self.get_fullmove_clock().parse::<u32>().unwrap() }
+    #[allow(clippy::unwrap_used)]
     fn parse_halfmove_clock(&self) -> u32 { self.get_halfmove_clock().parse::<u32>().unwrap() }
 }
 
@@ -1561,12 +1565,15 @@ impl From<&Fen> for Bitboard {
     }
 }
 
+#[allow(clippy::fallible_impl_from)]
 impl From<Bitboard> for Fen {
     fn from(bitboard: Bitboard) -> Self {
         Self::from(&bitboard)
     }
 }
 
+#[allow(clippy::fallible_impl_from)]
+#[allow(clippy::unwrap_used)]
 impl From<&Bitboard> for Fen {
     fn from(bitboard: &Bitboard) -> Self {
         let mut result = String::new();
@@ -1579,7 +1586,7 @@ impl From<&Bitboard> for Fen {
                 match maybe_piece {
                     Some(piece) => {
                         if consecutive_empty > 0 {
-                            result.push(from_digit(consecutive_empty, 10).unwrap());
+                            result.push(char::from_digit(consecutive_empty, 10).unwrap());
                         }
                         consecutive_empty = 0;
                         result.push(piece.fen);
@@ -1590,7 +1597,7 @@ impl From<&Bitboard> for Fen {
                 };
             }
             if consecutive_empty > 0 {
-                result.push(from_digit(consecutive_empty, 10).unwrap());
+                result.push(char::from_digit(consecutive_empty, 10).unwrap());
             }
             if rank < 7 {
                 result.push('/');
@@ -1638,11 +1645,13 @@ impl Bitboard {
     }
 
     pub fn from_fen_string_unchecked(fen: &str) -> Self {
-        Self::from_fen_string(fen).unwrap()
+        Self::from_fen_string(fen).unwrap_or_else(|_| panic!("Illegal fen string {}", fen))
     }
 }
 
 impl Display for Bitboard {
+    #[allow(clippy::unwrap_used)]
+    #[allow(clippy::option_if_let_else)]
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         fn format_information<T: Display>(key: &str, value: T) -> String {
             format!("║ {: <30}║\n", format!("{: >14}: {}", key, value))

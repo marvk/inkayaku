@@ -8,7 +8,7 @@ use std::time::Duration;
 use marvk_chess_core::fen::{Fen, FenParseError};
 
 use crate::uci::{Go, ParseUciMoveError, UciMove};
-use crate::uci::parser::ParserError::*;
+use crate::uci::parser::ParserError::{DuplicatedToken, InvalidFen, InvalidInt, InvalidUciMove, UnexpectedEndOfCommand, UnexpectedToken, UnknownCommand};
 use crate::uci::UciCommand;
 use crate::uci::UciCommand::{Go as GoCommand, IsReady, PonderHit, PositionFrom, Quit, Register, RegisterLater, Stop, Uci, UciNewGame};
 
@@ -23,7 +23,7 @@ pub struct Node {
 }
 
 impl Node {
-    fn new(key: String, value: NodeValue) -> Self {
+    const fn new(key: String, value: NodeValue) -> Self {
         Self { key, value }
     }
 
@@ -31,11 +31,11 @@ impl Node {
         Self::new(key.to_string(), NodeValue::None)
     }
 
-    pub fn single(key: &str, node: Node) -> Self {
+    pub fn single(key: &str, node: Self) -> Self {
         Self::new(key.to_string(), NodeValue::Single(Box::new(node)))
     }
 
-    pub fn multiple(key: &str, nodes: Vec<Node>) -> Self {
+    pub fn multiple(key: &str, nodes: Vec<Self>) -> Self {
         Self::new(key.to_string(), NodeValue::Multiple(nodes))
     }
 }
@@ -94,24 +94,11 @@ impl<'a> CommandParser<'a> {
     }
 
     fn next(&self) -> Result<&str, ParserError> {
-        match self.queue.borrow_mut().pop_front() {
-            Some(result) => Ok(result),
-            None => Err(UnexpectedEndOfCommand),
-        }
+        self.queue.borrow_mut().pop_front().ok_or(UnexpectedEndOfCommand)
     }
 
     fn peek(&self) -> Result<&str, ParserError> {
-        match self.queue.borrow().front().copied() {
-            Some(result) => Ok(result),
-            None => Err(UnexpectedEndOfCommand),
-        }
-    }
-
-    fn remaining(&self) -> Result<String, ParserError> {
-        match self.queue.borrow().iter().cloned().collect::<Vec<&str>>().join(" ") {
-            result if !result.is_empty() => Ok(result),
-            _ => Err(UnexpectedEndOfCommand),
-        }
+        self.queue.borrow().front().copied().ok_or(UnexpectedEndOfCommand)
     }
 
     fn until_token_or_end(&self, token: &str) -> Result<String, ParserError> {
@@ -127,7 +114,7 @@ impl<'a> CommandParser<'a> {
 
         while self.peek().map(|s| !stop_tokens.contains(&s)).unwrap_or(false) {
             result.push(' ');
-            result.push_str(self.next().unwrap())
+            result.push_str(self.next()?);
         }
 
         Ok(result)
@@ -136,7 +123,7 @@ impl<'a> CommandParser<'a> {
     const GO_TOKENS: [&'static str; 12] = ["searchmoves", "ponder", "wtime", "btime", "winc", "binc", "movestogo", "depth", "nodes", "mate", "movetime", "infinite"];
 
     fn parse_go(&self) -> Result<UciCommand, ParserError> {
-        let mut go = Go { ..Go::EMPTY };
+        let mut go = Go::EMPTY;
 
         let mut visited_tokens = HashSet::new();
 
@@ -198,7 +185,7 @@ impl<'a> CommandParser<'a> {
         loop {
             match self.peek() {
                 Ok(token) if stop_tokens.contains(&token) => break,
-                Ok(_) => result.push(UciMove::parse(self.next()?).map_err(InvalidUciMove)?),
+                Ok(_) => result.push(UciMove::from_str(self.next()?).map_err(InvalidUciMove)?),
                 Err(UnexpectedEndOfCommand) => break,
                 Err(error) => return Err(error),
             }
@@ -208,16 +195,14 @@ impl<'a> CommandParser<'a> {
     }
 
     fn parse_register(&self) -> Result<UciCommand, ParserError> {
-        match self.peek()? {
-            "later" => Ok(RegisterLater),
-            _ => {
-                self.consume("name")?;
-                let name = self.until_token_or_end("code")?;
-                self.consume("code")?;
-                let code = self.until_end()?;
-
-                Ok(Register { name, code })
-            }
+        if self.peek()? == "later" {
+            Ok(RegisterLater)
+        } else {
+            self.consume("name")?;
+            let name = self.until_token_or_end("code")?;
+            self.consume("code")?;
+            let code = self.until_end()?;
+            Ok(Register { name, code })
         }
     }
 

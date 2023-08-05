@@ -284,16 +284,19 @@ pub const fn square_shift_from_index(file_index: u32, rank_index: u32) -> Square
 
 // #[inline(always)]
 pub fn square_mask_from_fen(fen: &str) -> SquareMaskBits {
-    1 << square_shift_from_fen(fen)
+    1 << square_shift_from_fen_unchecked(fen)
 }
 
 // #[inline(always)]
-pub fn square_shift_from_fen(fen: &str) -> SquareShiftBits {
-    assert_eq!(fen.len(), 2, "Failed for {}", fen);
+#[allow(clippy::unwrap_used)]
+pub fn square_shift_from_fen_unchecked(fen: &str) -> SquareShiftBits {
+    assert_eq!(fen.len(), 2, "Illegal string length for square {}", fen);
     let mut chars = fen.chars();
 
-    let file_index = (chars.next().unwrap() as u8 - b'a') as u32;
-    let rank_index = 8 - chars.next().unwrap().to_digit(10).unwrap();
+    let first_char = chars.next().unwrap();
+    let file_index = (first_char as u8 - b'a') as u32;
+    let second_char = chars.next().unwrap();
+    let rank_index = 8 - second_char.to_digit(10).unwrap_or_else(|| panic!("{} could not be parsed into a number", second_char));
 
     square_shift_from_index(file_index, rank_index)
 }
@@ -302,6 +305,7 @@ pub fn fen_from_square_mask(square_mask: SquareMaskBits) -> String {
     fen_from_square_shift(square_mask.trailing_zeros())
 }
 
+#[allow(clippy::unwrap_used)]
 pub fn fen_from_square_shift(square_shift: SquareShiftBits) -> String {
     assert!(square_shift < 64, "Should be valid square shift");
 
@@ -389,7 +393,7 @@ mod tests {
     }
 
     fn test_square_shift_from_fen(fen: &str, expected: SquareShiftBits) {
-        assert_eq!(square_shift_from_fen(fen), expected, "fen {} should be {}", fen, expected)
+        assert_eq!(square_shift_from_fen_unchecked(fen), expected, "fen {} should be {}", fen, expected)
     }
 
     #[test]

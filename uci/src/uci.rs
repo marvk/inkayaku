@@ -1,8 +1,9 @@
 use std::fmt::{Display, Formatter};
+use std::str::FromStr;
 use std::time::Duration;
 
 use marvk_chess_core::constants::piece::Piece;
-use marvk_chess_core::constants::square::*;
+use marvk_chess_core::constants::square::Square;
 use marvk_chess_core::fen::Fen;
 
 use crate::uci::ParseUciMoveError::InvalidFormat;
@@ -24,18 +25,27 @@ pub struct UciMove {
 }
 
 impl UciMove {
-    pub fn new(source: Square, target: Square) -> Self {
+    pub const fn new(source: Square, target: Square) -> Self {
         Self { source, target, promote_to: None }
     }
 
-    pub fn new_with_promotion(source: Square, target: Square, promote_to: Piece) -> Self {
+    pub const fn new_with_promotion(source: Square, target: Square, promote_to: Piece) -> Self {
         Self { source, target, promote_to: Some(promote_to) }
     }
 
-    pub fn parse(raw: &str) -> Result<UciMove, ParseUciMoveError> {
-        let mut chars = raw.chars();
+    #[deprecated]
+    pub fn parse(raw: &str) -> Result<Self, ParseUciMoveError> {
+        Self::from_str(raw)
+    }
+}
 
-        let produce_error = || InvalidFormat(raw.to_string());
+impl FromStr for UciMove {
+    type Err = ParseUciMoveError;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let mut chars = s.chars();
+
+        let produce_error = || InvalidFormat(s.to_string());
 
         let mut next_char = || {
             chars.next().ok_or_else(produce_error)
@@ -49,7 +59,7 @@ impl UciMove {
             Err(_) => None,
         };
 
-        Ok(UciMove {
+        Ok(Self {
             source,
             target,
             promote_to,
@@ -64,7 +74,7 @@ impl Display for UciMove {
             "{}{}{}",
             self.source.fen(),
             self.target.fen(),
-            self.promote_to.as_ref().map(|m| m.uci_name().to_string()).unwrap_or_else(|| "".to_string())
+            self.promote_to.as_ref().map_or_else(String::new, |m| m.uci_name().to_string())
         )
     }
 }
@@ -86,7 +96,7 @@ pub struct Go {
 }
 
 impl Go {
-    pub const EMPTY: Go = Go::new(Vec::new(), false, None, None, None, None, None, None, None, None, None, false);
+    pub const EMPTY: Self = Self::new(Vec::new(), false, None, None, None, None, None, None, None, None, None, false);
 
     #[allow(clippy::too_many_arguments)]
     pub const fn new(
@@ -101,7 +111,7 @@ impl Go {
         nodes: Option<u64>,
         mate: Option<u64>,
         move_time: Option<Duration>,
-        infinite: bool
+        infinite: bool,
     ) -> Self {
         Self { search_moves, ponder, white_time, black_time, white_increment, black_increment, moves_to_go, depth, nodes, mate, move_time, infinite }
     }
@@ -119,8 +129,8 @@ impl Display for Bound {
             f,
             "{}",
             match self {
-                Bound::LOWER => "lowerbound",
-                Bound::UPPER => "upperbound",
+                Self::LOWER => "lowerbound",
+                Self::UPPER => "upperbound",
             },
         )
     }
@@ -183,7 +193,7 @@ impl Info {
         }
     }
 
-    pub const EMPTY: Self = Info {
+    pub const EMPTY: Self = Self {
         depth: None,
         selective_depth: None,
         time: None,
@@ -224,9 +234,9 @@ impl Display for ProtectionMessage {
             f,
             "{}",
             match self {
-                ProtectionMessage::CHECKING => "checking",
-                ProtectionMessage::OK => "ok",
-                ProtectionMessage::ERROR => "error",
+                Self::CHECKING => "checking",
+                Self::OK => "ok",
+                Self::ERROR => "error",
             },
         )
     }

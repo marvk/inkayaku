@@ -27,8 +27,22 @@ pub enum FenParseError {
     RankWithInvalidPieceCount { rank: String, count: u32 },
 }
 
+fn _construct_fen_startpos() -> Fen {
+    #[allow(clippy::unwrap_used)]
+    Fen::from_str(FEN_STARTPOS_STRING).unwrap()
+}
+
 lazy_static! {
-    static ref FEN_STARTPOS: Fen = Fen::from_str(FEN_STARTPOS_STRING).unwrap();
+    static ref FEN_STARTPOS: Fen = _construct_fen_startpos();
+}
+
+fn _construct_fen_regex() -> Regex {
+    #[allow(clippy::unwrap_used)]
+    Regex::new(r"^([PNBRQKpnbrqk1-8]{1,8}(?:/[PNBRQKpnbrqk1-8]{1,8}){7}) ([bw]) (KQ?k?q?|Qk?q?|kq?|q|-) ([a-h][1-8]|-)(?: (\d+) (\d+))?$").unwrap()
+}
+
+lazy_static! {
+    static ref FEN_REGEX: Regex = _construct_fen_regex();
 }
 
 pub const FEN_STARTPOS_STRING: &str = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
@@ -57,11 +71,8 @@ impl Fen {
         self.fullmove_clock.as_ref().map_or("1", |range| &self.fen[range.start..range.end])
     }
 
+    /// If the result is `Ok`, it guarantees at least 5 valid capture groups.
     fn parse(fen: &str) -> Result<Captures, FenParseError> {
-        lazy_static! {
-            static ref FEN_REGEX: Regex = Regex::new(r"^([PNBRQKpnbrqk1-8]{1,8}(?:/[PNBRQKpnbrqk1-8]{1,8}){7}) ([bw]) (KQ?k?q?|Qk?q?|kq?|q|-) ([a-h][1-8]|-)(?: (\d+) (\d+))?$").unwrap();
-        }
-
         match FEN_REGEX.captures(fen) {
             Some(captures) if (captures.len() == 7 || captures.len() == 5) => Ok(captures),
             Some(captures) => Err(IllegalNumberOfGroups(captures.len())),
@@ -114,9 +125,11 @@ impl FromStr for Fen {
             })
         };
 
+        #[allow(clippy::unwrap_used)]
         Self::validate_ranks(group_to_slice(1).map(|range| &fen[range.start..range.end]).unwrap())?;
 
         Ok(
+            #[allow(clippy::unwrap_used)]
             Self {
                 fen,
                 piece_placement: group_to_slice(1).unwrap(),

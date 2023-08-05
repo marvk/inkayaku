@@ -9,6 +9,7 @@ pub struct CommandUciTx {
 
 impl CommandUciTx {
     fn send(&self, command: UciTxCommand) {
+        #[allow(clippy::unwrap_used)]
         self.command_consumer.lock().unwrap().send(command).unwrap();
     }
     pub fn new(command_consumer: Sender<UciTxCommand>) -> Self {
@@ -60,7 +61,7 @@ impl UciTx for CommandUciTx {
     }
 
     fn option_combo(&self, name: &str, default: &str, vars: &[&str]) {
-        self.send(UciTxCommand::OptionCombo { name: name.to_string(), default: default.to_string(), vars: vars.iter().map(|s| s.to_string()).collect() });
+        self.send(UciTxCommand::OptionCombo { name: name.to_string(), default: default.to_string(), vars: vars.iter().map(|&s| s.to_string()).collect() });
     }
 
     fn option_button(&self, name: &str) {

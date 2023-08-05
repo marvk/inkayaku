@@ -204,7 +204,8 @@ impl Square {
         }
     }
 
-    pub fn by(file: File, rank: Rank) -> Self {
+    pub fn by(file: &File, rank: &Rank) -> Self {
+        #[allow(clippy::unwrap_used)]
         Self::by_indices(file.index as usize, rank.index as usize).unwrap()
     }
 
