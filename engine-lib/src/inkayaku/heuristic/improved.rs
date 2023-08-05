@@ -1,5 +1,3 @@
-use std::cmp::{max, min};
-
 use marvk_chess_board::board::Bitboard;
 use marvk_chess_board::board::constants::ZobristHash;
 
@@ -115,7 +113,6 @@ impl Heuristic for ImprovedHeuristic {
         let taper_factor = taper_factor(&counts);
 
 
-
         todo!()
     }
 }
@@ -139,5 +136,5 @@ fn taper_factor(counts: &PieceCounts) -> u8 {
 
     let result = (phase * 255 + TOTAL_PHASE) / TOTAL_PHASE - 1;
 
-    min(max(result, 0), 255) as u8
+    result.clamp(0, 255) as u8
 }

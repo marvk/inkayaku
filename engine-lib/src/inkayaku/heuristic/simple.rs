@@ -103,7 +103,7 @@ const BLACK_TABLES: [[[i32; 64]; 6]; 3] = mirror_and_flip_sign(WHITE_TABLES);
 pub struct SimpleHeuristic;
 
 impl SimpleHeuristic {
-    fn piece_value(state: &PlayerState) -> i32 {
+    const fn piece_value(state: &PlayerState) -> i32 {
         (state.queens().count_ones() * QUEEN_VALUE +
             state.rooks().count_ones() * ROOK_VALUE +
             state.bishops().count_ones() * BISHOP_VALUE +
@@ -111,7 +111,7 @@ impl SimpleHeuristic {
             state.pawns().count_ones() * PAWN_VALUE) as i32
     }
 
-    fn game_stage(board: &Bitboard) -> GameStageBits {
+    const fn game_stage(board: &Bitboard) -> GameStageBits {
         let white_has_queens = board.white.queens() != 0;
         let black_has_queens = board.black.queens() != 0;
 
@@ -132,7 +132,7 @@ impl SimpleHeuristic {
         }
     }
 
-    fn piece_square_value(board: &Bitboard) -> i32 {
+    const fn piece_square_value(board: &Bitboard) -> i32 {
         let stage = Self::game_stage(board);
 
         let white_sum = Self::piece_square_sum_for_player(&board.white, &WHITE_TABLES[stage]);
@@ -141,7 +141,7 @@ impl SimpleHeuristic {
         white_sum + black_sum
     }
 
-    fn piece_square_sum_for_player(player: &PlayerState, tables: &[[i32; 64]; 6]) -> i32 {
+    const fn piece_square_sum_for_player(player: &PlayerState, tables: &[[i32; 64]; 6]) -> i32 {
         Self::piece_square_sum(player.pawns(), &tables[PAWN as usize - 1])
             + Self::piece_square_sum(player.knights(), &tables[KNIGHT as usize - 1])
             + Self::piece_square_sum(player.bishops(), &tables[BISHOP as usize - 1])
@@ -150,7 +150,7 @@ impl SimpleHeuristic {
             + Self::piece_square_sum(player.kings(), &tables[KING as usize - 1])
     }
 
-    fn piece_square_sum(mut occupancy: OccupancyBits, values: &[i32; 64]) -> i32 {
+    const fn piece_square_sum(mut occupancy: OccupancyBits, values: &[i32; 64]) -> i32 {
         let mut sum = 0;
 
         while occupancy != 0 {

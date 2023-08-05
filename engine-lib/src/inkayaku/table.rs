@@ -1,4 +1,4 @@
-use std::collections::{HashMap, LinkedList};
+use std::collections::{HashMap, VecDeque};
 use std::hash::Hash;
 
 use marvk_chess_board::board::constants::ZobristHash;
@@ -8,14 +8,14 @@ pub mod transposition;
 
 pub struct HashTable<K: Eq + Hash + Copy, V> {
     capacity: usize,
-    entry_list: LinkedList<K>,
+    entry_list: VecDeque<K>,
     entry_map: HashMap<K, V, nohash_hasher::BuildNoHashHasher<K>>,
 }
 
 impl<V> HashTable<ZobristHash, V> {
     pub fn new(capacity: usize) -> Self {
         let map = HashMap::with_hasher(nohash_hasher::BuildNoHashHasher::default());
-        Self { capacity, entry_list: LinkedList::new(), entry_map: map }
+        Self { capacity, entry_list: VecDeque::new(), entry_map: map }
     }
 
     fn clear(&mut self) {
@@ -23,6 +23,7 @@ impl<V> HashTable<ZobristHash, V> {
         self.entry_map.clear();
     }
 
+    #[allow(clippy::unwrap_used)]
     fn put(&mut self, key: ZobristHash, value: V) {
         if self.entry_map.insert(key, value).is_none() {
             self.entry_list.push_back(key);

@@ -8,7 +8,7 @@ pub struct KillerTable {
 
 impl KillerTable {
     pub fn clear(&mut self) {
-        self.table.clear()
+        self.table.clear();
     }
 
     pub fn age(&mut self, plys: usize) {

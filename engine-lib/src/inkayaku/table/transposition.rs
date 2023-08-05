@@ -18,7 +18,7 @@ pub struct TtEntry {
 }
 
 impl TtEntry {
-    pub fn new(mv: ValuedMove, zobrist_hash: ZobristHash, depth: usize, value: i32, node_type: NodeType) -> Self {
+    pub const fn new(mv: ValuedMove, zobrist_hash: ZobristHash, depth: usize, value: i32, node_type: NodeType) -> Self {
         Self { mv, zobrist_hash, depth, value, node_type }
     }
 }

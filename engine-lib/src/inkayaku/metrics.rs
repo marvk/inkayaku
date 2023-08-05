@@ -13,7 +13,7 @@ pub struct Metrics {
 }
 
 impl Metrics {
-    pub fn total_nodes(&self) -> u64 {
+    pub const  fn total_nodes(&self) -> u64 {
         self.negamax_nodes + self.quiescence_nodes
     }
 

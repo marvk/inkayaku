@@ -5,10 +5,10 @@ use std::thread::JoinHandle;
 
 use marvk_chess_uci::uci::{Engine, ProtectionMessage, UciCommand, UciTx};
 use SearchMessage::{UciGo, UciPositionFrom, UciUciNewGame};
-use UciCommand::*;
+use UciCommand::{IsReady, PonderHit, PositionFrom, Quit, Register, RegisterLater, SetDebug, SetOption, SetOptionValue, Stop, Uci, UciNewGame};
 use UciCommand::Go as GoCommand;
-use crate::inkayaku::heuristic::simple::SimpleHeuristic;
 
+use crate::inkayaku::heuristic::simple::SimpleHeuristic;
 use crate::inkayaku::move_order::MvvLvaMoveOrder;
 use crate::inkayaku::search::{EngineOptions, Search, SearchMessage};
 use crate::inkayaku::search::SearchMessage::{UciDebug, UciPonderHit, UciQuit, UciStop};
@@ -44,6 +44,7 @@ impl<T: UciTx + Send + Sync + 'static> Inkayaku<T> {
 
 impl<T: UciTx + Send + Sync + 'static> Engine for Inkayaku<T> {
     #[allow(unused_variables)]
+    #[allow(clippy::unwrap_used)]
     fn accept(&mut self, command: UciCommand) {
         match command {
             Uci => {

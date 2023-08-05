@@ -40,7 +40,7 @@ impl ZobristHistory {
 
 impl Default for ZobristHistory {
     fn default() -> Self {
-        ZobristHistory { history: [0; 5000] }
+        Self { history: [0; 5000] }
     }
 }
 

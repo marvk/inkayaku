@@ -36,7 +36,7 @@ pub trait Heuristic {
     }
     fn score_from_value(&self, value: i32, bitboard: &Bitboard) -> Score {
         if value.abs() > self.win_score() / 2 {
-            let offset = if value > 0 && bitboard.turn == WHITE { 1 } else { 0 };
+            let offset = i32::from(value > 0 && bitboard.turn == WHITE);
             let mate_in = (self.win_score() - value.abs() - bitboard.fullmove_clock as i32 + offset) * value.signum();
             Mate { mate_in }
         } else {
@@ -96,7 +96,7 @@ struct PieceCount {
 }
 
 impl PieceCount {
-    pub fn count_from(player_state: &PlayerState) -> Self {
+    pub const fn count_from(player_state: &PlayerState) -> Self {
         Self {
             pawns: player_state.pawns().count_ones(),
             knights: player_state.knights().count_ones(),
@@ -113,16 +113,16 @@ struct PieceCounts {
 }
 
 impl PieceCounts {
-    pub fn count_from(bitboard: &Bitboard) -> Self {
+    pub const fn count_from(bitboard: &Bitboard) -> Self {
         Self {
             white: PieceCount::count_from(&bitboard.white),
             black: PieceCount::count_from(&bitboard.black),
         }
     }
 
-    fn pawns(&self) -> u32 { self.white.pawns + self.black.pawns }
-    fn knights(&self) -> u32 { self.white.knights + self.black.knights }
-    fn bishops(&self) -> u32 { self.white.bishops + self.black.bishops }
-    fn rooks(&self) -> u32 { self.white.rooks + self.black.rooks }
-    fn queens(&self) -> u32 { self.white.queens + self.black.queens }
+    const fn pawns(&self) -> u32 { self.white.pawns + self.black.pawns }
+    const fn knights(&self) -> u32 { self.white.knights + self.black.knights }
+    const fn bishops(&self) -> u32 { self.white.bishops + self.black.bishops }
+    const fn rooks(&self) -> u32 { self.white.rooks + self.black.rooks }
+    const fn queens(&self) -> u32 { self.white.queens + self.black.queens }
 }

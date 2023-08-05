@@ -53,10 +53,7 @@ impl<T: UciTx, H: Heuristic, M: MoveOrder> Search<T, H, M> {
                         self.params.go = go;
                         self.go();
                     }
-                    UciStop => {
-                        // ignore during idle
-                    }
-                    UciPonderHit => {
+                    UciStop | UciPonderHit => {
                         // ignore during idle
                     }
                     UciQuit => {
@@ -104,11 +101,8 @@ impl<T: UciTx, H: Heuristic, M: MoveOrder> Search<T, H, M> {
                     UciDebug(debug) => {
                         self.options.debug = debug;
                     }
-                    UciPositionFrom(..) => {
-                        // Ignore positions send during go
-                    }
-                    UciGo(..) => {
-                        // Ignore go send during go
+                    UciPositionFrom(..) | UciGo(..) => {
+                        // Ignore during go
                     }
                     UciStop => {
                         self.flags.stop_as_soon_as_possible = true;
@@ -129,7 +123,7 @@ impl<T: UciTx, H: Heuristic, M: MoveOrder> Search<T, H, M> {
         }
     }
 
-    fn create_buffer(&self) -> Vec<Move> {
+    fn create_buffer() -> Vec<Move> {
         Vec::with_capacity(200)
     }
 
@@ -161,38 +155,45 @@ impl<T: UciTx, H: Heuristic, M: MoveOrder> Search<T, H, M> {
     }
 
     // Time remaining of the engine
-    fn get_self_time_remaining(&self) -> Option<Duration> {
+    const fn get_self_time_remaining(&self) -> Option<Duration> {
         if self.state.bitboard.turn == WHITE { self.params.go.white_time } else { self.params.go.black_time }
     }
 
     /// Increment of the engine
-    fn get_self_increment(&self) -> Option<Duration> {
+    const fn get_self_increment(&self) -> Option<Duration> {
         if self.state.bitboard.turn == WHITE { self.params.go.white_increment } else { self.params.go.black_increment }
     }
 
     /// Check if the last played move was the ponder move. If it was, calculate the current pv.
-    fn try_set_pv_from_continuation(&mut self) {
+    fn try_set_pv_from_continuation(&mut self) -> Result<(), PvContinuationError> {
         let last_ponder_move = self.state.ponder_move();
         let last_move_played = self.params.moves.last();
 
-        let message = match (last_ponder_move, last_move_played) {
-            (Some(last_ponder_move), Some(last_move_played)) => {
-                if last_ponder_move.bits == last_move_played.bits {
-                    let new_pv = self.state.principal_variation.take().unwrap().drain(0..2).collect();
-                    let result = format!("successful ponder continuation with {}: {:?}", last_ponder_move, new_pv);
-                    self.state.principal_variation = Some(new_pv);
-                    result
+        match (last_ponder_move, last_move_played) {
+            (Some(last_ponder_move), Some(&last_played_move)) => {
+                if last_ponder_move.bits == last_played_move.bits {
+                    let last_pv = self.state.principal_variation.take();
+                    if let Some(mut last_pv) = last_pv {
+                        if last_pv.len() > 2 {
+                            let new_pv = last_pv.drain(0..2).collect();
+                            self.state.principal_variation = Some(new_pv);
+                            Ok(())
+                        } else {
+                            Err(PvContinuationError::PvTooShort(last_pv.len()))
+                        }
+                    } else {
+                        Err(PvContinuationError::NoPreviousPv { last_ponder_move, last_played_move })
+                    }
                 } else {
-                    format!("failed ponder continuation from ponder {}, {} was played", last_ponder_move, last_move_played)
+                    Err(PvContinuationError::DivergedFromPv { last_ponder_move, last_played_move })
                 }
             }
-            (Some(last_ponder_move), None) => format!("failed ponder continuation from ponder {}, couldn't find last played move", last_ponder_move),
-            _ => "failed ponder continuation, no ponder move".to_string(),
-        };
-
-        self.uci_tx.debug(&message);
+            (Some(last_ponder_move), None) => Err(PvContinuationError::NoLastPlayedMove { last_ponder_move }),
+            _ => Err(PvContinuationError::NoPonderMove),
+        }
     }
 
+    #[allow(clippy::option_if_let_else)]
     fn calculate_max_thinking_time(&self) -> Option<Duration> {
         let increment = self.get_self_increment();
         let time_remaining = self.get_self_time_remaining();
@@ -224,10 +225,10 @@ impl<T: UciTx, H: Heuristic, M: MoveOrder> Search<T, H, M> {
         let mut best_move = None;
 
         if self.options.try_previous_pv {
-            self.try_set_pv_from_continuation();
+            self.try_set_pv_from_continuation().ok();
         }
 
-        let max_depth = self.params.go.depth.map(|d| d as usize).unwrap_or(999999);
+        let max_depth = self.params.go.depth.map_or(999_999, |d| d as usize);
 
         if self.params.go.move_time.is_none() {
             self.params.go.move_time = self.calculate_max_thinking_time().map(|d| d.mul(2));
@@ -240,7 +241,7 @@ impl<T: UciTx, H: Heuristic, M: MoveOrder> Search<T, H, M> {
 
         for depth in 1..=max_depth {
             let current_best_move = self.search_negamax(
-                &mut self.create_buffer(),
+                &mut Self::create_buffer(),
                 0,
                 depth,
                 self.heuristic.loss_score(),
@@ -258,8 +259,8 @@ impl<T: UciTx, H: Heuristic, M: MoveOrder> Search<T, H, M> {
 
             if !stop {
                 let bb_pv = current_best_move.calculate_principal_variation();
-                self.state.principal_variation = Some(bb_pv.iter().map(|&&mv| mv).collect());
-                uci_pv = Some(bb_pv.into_iter().map(|&mv| move_into_uci_move(mv)).collect::<Vec<_>>());
+                self.state.principal_variation = Some(bb_pv.clone());
+                uci_pv = Some(bb_pv.into_iter().map(move_into_uci_move).collect::<Vec<_>>());
                 score = Some(self.heuristic.score_from_value(current_best_move.value, &self.state.bitboard));
 
                 best_move = Some(current_best_move);
@@ -290,7 +291,7 @@ impl<T: UciTx, H: Heuristic, M: MoveOrder> Search<T, H, M> {
 
     #[inline(always)]
     fn should_check_flags(&mut self) -> bool {
-        self.state.metrics.last.negamax_nodes % 100000 == 0 && self.state.metrics.last.negamax_nodes > 0
+        self.state.metrics.last.negamax_nodes % 100_000 == 0 && self.state.metrics.last.negamax_nodes > 0
     }
 
     fn filter_search_moves(&mut self, buffer: &mut Vec<Move>) {
@@ -303,6 +304,7 @@ impl<T: UciTx, H: Heuristic, M: MoveOrder> Search<T, H, M> {
         }
     }
 
+    #[allow(clippy::unwrap_used)]
     #[allow(clippy::too_many_arguments)]
     fn search_negamax(&mut self, buffer: &mut Vec<Move>, ply_depth_from_root: usize, max_ply: usize, alpha_original: i32, beta_original: i32, is_pv: bool, zobrist_hash: ZobristHash, zobrist_pawn_hash: ZobristHash) -> ValuedMove {
         let color = self.state.bitboard.turn;
@@ -395,7 +397,7 @@ impl<T: UciTx, H: Heuristic, M: MoveOrder> Search<T, H, M> {
         let mut best_move: Option<Move> = None;
         let mut legal_moves_encountered = false;
 
-        let mut next_buffer = self.create_buffer();
+        let mut next_buffer = Self::create_buffer();
 
         for mv in buffer {
             self.state.bitboard.make(*mv);
@@ -414,7 +416,7 @@ impl<T: UciTx, H: Heuristic, M: MoveOrder> Search<T, H, M> {
                 max_ply,
                 -beta,
                 -alpha,
-                is_pv && pv_move.map(|pv_mv| pv_mv.bits == mv.bits).unwrap_or(false),
+                is_pv && pv_move.map_or(false, |pv_mv| pv_mv.bits == mv.bits),
                 zobrist_hash ^ zobrist_xor,
                 zobrist_pawn_hash ^ zobrist_pawn_xor,
             );
@@ -548,7 +550,7 @@ impl<T: UciTx, H: Heuristic, M: MoveOrder> Search<T, H, M> {
 }
 
 #[inline(always)]
-fn calculate_heuristic_factor(color: ColorBits) -> i32 {
+const fn calculate_heuristic_factor(color: ColorBits) -> i32 {
     1 + (color as i32) * -2
 }
 
@@ -560,11 +562,11 @@ pub struct ValuedMove {
 }
 
 impl ValuedMove {
-    pub fn new(value: i32, mv: Option<Move>, pv_child: Option<ValuedMove>) -> Self {
+    pub fn new(value: i32, mv: Option<Move>, pv_child: Option<Self>) -> Self {
         Self { value, mv, pv_child: Box::new(pv_child) }
     }
 
-    pub fn parent(value: i32, mv: Move, pv_child: ValuedMove) -> Self {
+    pub fn parent(value: i32, mv: Move, pv_child: Self) -> Self {
         Self::new(value, Some(mv), Some(pv_child))
     }
 
@@ -572,15 +574,14 @@ impl ValuedMove {
         Self::new(value, None, None)
     }
 
-    fn calculate_principal_variation(&self) -> Vec<&Move> {
+    fn calculate_principal_variation(&self) -> Vec<Move> {
         let mut result = Vec::new();
 
         let option = Some(self);
         let mut maybe_current = option;
 
-        while maybe_current.is_some() {
-            let current = maybe_current.unwrap();
-            if let Some(mv) = &current.mv {
+        while let Some(current) = maybe_current {
+            if let Some(mv) = current.mv {
                 result.push(mv);
             }
 
@@ -635,11 +636,11 @@ struct SearchState {
 
 impl SearchState {
     fn ponder_move(&self) -> Option<Move> {
-        self.principal_variation.as_ref().and_then(|pv| pv.get(1)).cloned()
+        self.principal_variation.as_ref().and_then(|pv| pv.get(1)).copied()
     }
 
     fn elapsed(&self) -> Duration {
-        self.started_at.elapsed().unwrap()
+        self.started_at.elapsed().unwrap_or(Duration::ZERO)
     }
 }
 
@@ -660,6 +661,7 @@ impl Default for SearchState {
 
 /// Control the search "from the outside"
 #[derive(Default)]
+#[allow(clippy::struct_excessive_bools)]
 struct SearchFlags {
     reset_for_next_search: bool,
     stop_as_soon_as_possible: bool,
@@ -673,6 +675,14 @@ struct SearchParams {
     go: Go,
     fen: Fen,
     moves: Vec<Move>,
+}
+
+enum PvContinuationError {
+    PvTooShort(usize),
+    NoPreviousPv { last_ponder_move: Move, last_played_move: Move },
+    DivergedFromPv { last_ponder_move: Move, last_played_move: Move },
+    NoLastPlayedMove { last_ponder_move: Move },
+    NoPonderMove,
 }
 
 #[cfg(test)]

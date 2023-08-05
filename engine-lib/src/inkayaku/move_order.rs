@@ -11,13 +11,13 @@ pub struct MvvLvaMoveOrder;
 
 impl MvvLvaMoveOrder {
     #[inline(always)]
-    fn eval(mv: &Move) -> i32 {
+    const fn eval(mv: &Move) -> i32 {
         mv.mvvlva
     }
 
     #[inline(always)]
-    fn move_bonus(mv: &Move, pv_move: Option<Move>, bonus: i32) -> i32 {
-        pv_move.filter(|pv_move| pv_move.bits == mv.bits).map(|_| bonus).unwrap_or(0)
+    fn move_bonus(mv: &Move, high_value_move: Option<Move>, bonus: i32) -> i32 {
+        high_value_move.filter(|pv_move| pv_move.bits == mv.bits).map_or(0, |_| bonus)
     }
 }
 
