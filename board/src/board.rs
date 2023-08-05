@@ -184,7 +184,7 @@ pub struct PlayerState {
 }
 
 impl PlayerState {
-    fn full_occupancy(&self) -> OccupancyBits {
+    const fn full_occupancy(&self) -> OccupancyBits {
         self.kings() | self.queens() | self.rooks() | self.bishops() | self.knights() | self.pawns()
     }
 
@@ -985,15 +985,15 @@ impl Bitboard {
     }
 
     /// Calculate the zobrist hash for the current state from scratch
-    pub fn calculate_zobrist_hash(&self) -> ZobristHash {
+    pub const fn calculate_zobrist_hash(&self) -> ZobristHash {
         Self::_zobrist_hash(&self.white, &self.black, self.turn, self.en_passant_square_shift)
     }
 
-    pub fn calculate_zobrist_pawn_hash(&self) -> ZobristHash {
+    pub const fn calculate_zobrist_pawn_hash(&self) -> ZobristHash {
         Self::_zobrist_pawn_hash(&self.white, &self.black, self.turn, self.en_passant_square_shift)
     }
 
-    fn _zobrist_pawn_hash(white: &PlayerState, black: &PlayerState, turn: ColorBits, en_passant_square_shift: SquareShiftBits) -> ZobristHash {
+    const fn _zobrist_pawn_hash(white: &PlayerState, black: &PlayerState, turn: ColorBits, en_passant_square_shift: SquareShiftBits) -> ZobristHash {
         let mut hash = Self::zobrist_hash_for_occupancy(white.pawns(), PAWN, WHITE)
             ^ Self::zobrist_hash_for_occupancy(black.pawns(), PAWN, BLACK);
 
@@ -1006,7 +1006,7 @@ impl Bitboard {
         hash
     }
 
-    fn _zobrist_hash(white: &PlayerState, black: &PlayerState, turn: ColorBits, en_passant_square_shift: SquareShiftBits) -> ZobristHash {
+    const fn _zobrist_hash(white: &PlayerState, black: &PlayerState, turn: ColorBits, en_passant_square_shift: SquareShiftBits) -> ZobristHash {
         let mut hash =
             Self::zobrist_hash_for_occupancy(white.kings(), KING, WHITE)
                 ^ Self::zobrist_hash_for_occupancy(white.queens(), QUEEN, WHITE)
@@ -1039,7 +1039,7 @@ impl Bitboard {
         hash ^ Self::_zobrist_pawn_hash(white, black, turn, en_passant_square_shift)
     }
 
-    fn zobrist_hash_for_occupancy(mut occupancy: OccupancyBits, piece: PieceBits, color: ColorBits) -> ZobristHash {
+    const fn zobrist_hash_for_occupancy(mut occupancy: OccupancyBits, piece: PieceBits, color: ColorBits) -> ZobristHash {
         let mut result = 0;
 
         while occupancy != 0 {
@@ -1095,7 +1095,7 @@ impl Bitboard {
     }
 
     #[inline(always)]
-    fn opposite_turn(&self) -> ColorBits {
+    const fn opposite_turn(&self) -> ColorBits {
         opposite_color(self.turn)
     }
 
@@ -1318,6 +1318,8 @@ impl Bitboard {
                                 return false;
                             }
 
+                            // TODO clean up all matches
+
                             match (promotion.as_str(), mv.get_promotion_piece()) {
                                 ("B", BISHOP) => (),
                                 ("N", KNIGHT) => (),
@@ -1496,9 +1498,9 @@ impl FenParseExt for Fen {
         self.get_piece_placement().split('/').enumerate().for_each(|(rank_index, file)| {
             let mut file_index = 0;
 
-            file.chars().for_each(|c| {
+            for c in file.chars() {
                 if c.is_ascii_digit() {
-                    file_index += c.to_digit(10).unwrap()
+                    file_index += c.to_digit(10).unwrap();
                 } else {
                     let board = if c.is_uppercase() { &mut white } else { &mut black };
 
@@ -1516,7 +1518,7 @@ impl FenParseExt for Fen {
 
                     file_index += 1;
                 }
-            })
+            }
         });
 
         white.queen_side_castle = self.get_castling_availability().contains('Q');

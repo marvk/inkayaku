@@ -36,7 +36,7 @@ impl MagicConfiguration {
     }
 
     #[inline(always)]
-    fn hash(&self, occupancy: u64) -> usize {
+    const fn hash(&self, occupancy: u64) -> usize {
         magic_hash(self.mask, self.hash_shift, self.hash_mask, self.magic, occupancy)
     }
 }
