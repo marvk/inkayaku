@@ -10,7 +10,7 @@ pub struct PgnRawAnnotatedMove {
 }
 
 impl PgnRawAnnotatedMove {
-    pub fn new(mv: String, annotation: Option<String>) -> Self {
+    pub const fn new(mv: String, annotation: Option<String>) -> Self {
         Self { mv, annotation }
     }
 }
@@ -63,7 +63,7 @@ impl<R: Read> PgnParser<R> {
                     return false;
                 }
                 Ok(bytes_read) if bytes_read < self.chunk_size => {
-                    self.current_buffer.resize(bytes_read, 0)
+                    self.current_buffer.resize(bytes_read, 0);
                 }
                 Ok(bytes_read) if bytes_read > self.chunk_size => {
                     panic!("Assertion Error");
@@ -122,7 +122,7 @@ impl<R: Read> PgnParser<R> {
 
     fn skip_blank_lines_and_spaces(&mut self) -> Result<(), PgnParserError> {
         while self.peek_byte()? == b'\n' || self.peek_byte()? == b' ' {
-            self.skip_byte()?
+            self.skip_byte()?;
         }
 
         Ok(())
@@ -213,12 +213,9 @@ impl<R: Read> PgnParser<R> {
             return Ok(None);
         }
 
-        match chars.next() {
-            Some('-') | Some('/') => {
-                self.skip_to_next_line()?;
-                return Ok(None);
-            }
-            _ => ()
+        if let Some('-' | '/') = chars.next() {
+            self.skip_to_next_line()?;
+            return Ok(None);
         }
 
         let mv = if token.contains('.') {

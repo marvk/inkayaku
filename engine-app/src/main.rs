@@ -42,9 +42,9 @@ fn read_line() -> Result<String, Error> {
 }
 
 fn print_ln(line: &str) {
-    println!("{}", line)
+    println!("{}", line);
 }
 
 fn print_err(line: &str) {
-    eprintln!("DEBUG: {}", line)
+    eprintln!("DEBUG: {}", line);
 }

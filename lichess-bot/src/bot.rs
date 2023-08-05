@@ -111,7 +111,7 @@ impl GameThread {
 
     fn accept_state(&self, state: GameStateHolder) -> bool {
         let mut engine = self.engine();
-        let moves = state.moves.iter().map(|m| UciMove::parse(m).unwrap()).collect();
+        let moves = state.moves.iter().map(|m| UciMove::from_str(m).unwrap()).collect();
 
         match state.status {
             GameStatusKey::Created | GameStatusKey::Started => {

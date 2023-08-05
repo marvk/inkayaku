@@ -1227,11 +1227,11 @@ impl Bitboard {
                     .into_iter()
                     .filter(|mv| {
                         match (piece.as_str(), mv.get_piece_moved()) {
-                            ("K", KING) => (),
-                            ("Q", QUEEN) => (),
-                            ("R", ROOK) => (),
-                            ("B", BISHOP) => (),
-                            ("N", KNIGHT) => (),
+                            ("K", KING)
+                            | ("Q", QUEEN)
+                            | ("R", ROOK)
+                            | ("B", BISHOP)
+                            | ("N", KNIGHT) => (),
                             _ => { return false; }
                         }
 
@@ -1301,7 +1301,6 @@ impl Bitboard {
                 let takes = captures.name("takes");
                 let promotion = captures.name("promotion");
 
-
                 let moves = moves
                     .into_iter()
                     .filter(|mv| {
@@ -1318,13 +1317,11 @@ impl Bitboard {
                                 return false;
                             }
 
-                            // TODO clean up all matches
-
                             match (promotion.as_str(), mv.get_promotion_piece()) {
-                                ("B", BISHOP) => (),
-                                ("N", KNIGHT) => (),
-                                ("R", ROOK) => (),
-                                ("Q", QUEEN) => (),
+                                ("B", BISHOP)
+                                | ("N", KNIGHT)
+                                | ("R", ROOK)
+                                | ("Q", QUEEN) => (),
                                 _ => { return false; }
                             }
                         }
@@ -1424,10 +1421,9 @@ impl Bitboard {
         let is_pawn_move = from_piece == Piece::PAWN;
 
         let disambiguation_symbol = match (any_share_source_file, any_share_source_rank, is_pawn_move) {
-            (true, _, true) => { from_square.file.fen.to_string() }
+            (true, _, true) | (false, true, false) => { from_square.file.fen.to_string() }
             (true, true, false) => { format!("{}{}", from_square.file.fen, from_square.rank.fen) }
             (true, false, false) => { from_square.rank.fen.to_string() }
-            (false, true, false) => { from_square.file.fen.to_string() }
             (_, _, _) => { String::new() }
         };
         let capture = if to_piece.is_some() { "x" } else { "" };

@@ -31,7 +31,7 @@ impl GeneratorConfiguration {
     }
 
     #[inline(always)]
-    fn hash(&self, occupancy: u64) -> usize {
+    const fn hash(&self, occupancy: u64) -> usize {
         magic_hash(self.mask, self.hash_shift, self.hash_mask, self.magic, occupancy)
     }
 }
@@ -80,7 +80,7 @@ impl ConfigurationGenerator {
                 for (hash_index, relevant_square) in relevant_squares.iter().enumerate() {
                     let mask = 1 << hash_index;
                     if (set_bits & mask) != 0 {
-                        current |= relevant_square.mask
+                        current |= relevant_square.mask;
                     }
                 }
 
@@ -107,7 +107,7 @@ impl ConfigurationGenerator {
         let mut result = vec![0; self.num_possible_configurations];
 
         for &occupancy in &self.possible_configurations {
-            result[self.hash(magic, occupancy)] = self.generate_attack(occupancy)
+            result[self.hash(magic, occupancy)] = self.generate_attack(occupancy);
         }
 
         GeneratorConfiguration::new(
@@ -123,18 +123,19 @@ impl ConfigurationGenerator {
         self.generate_all_attacks_with_magic(self.find_magic())
     }
 
+    #[allow(clippy::unwrap_used)]
     fn generate_attack(&self, occupancy: u64) -> u64 {
         let mut result = 0_u64;
 
         for direction in &self.directions {
-            let mut current = self.square.translate(direction);
+            let mut maybe_current = self.square.translate(direction);
 
-            while current.is_some() && (occupancy & current.unwrap().mask) == 0 {
-                result |= current.unwrap().mask;
-                current = current.unwrap().translate(direction);
+            while maybe_current.is_some() && (occupancy & maybe_current.unwrap().mask) == 0 {
+                result |= maybe_current.unwrap().mask;
+                maybe_current = maybe_current.unwrap().translate(direction);
             }
 
-            if let Some(square) = current {
+            if let Some(square) = maybe_current {
                 result |= square.mask;
             }
         }
@@ -148,12 +149,11 @@ impl ConfigurationGenerator {
         for direction in directions {
             let mut maybe_current = origin.translate(&direction);
 
-            while maybe_current.is_some() {
-                let current = maybe_current.unwrap();
+            while let Some(current) = maybe_current {
                 maybe_current = current.translate(&direction);
 
                 if maybe_current.is_some() {
-                    result.push(current)
+                    result.push(current);
                 }
             }
         }
@@ -170,7 +170,7 @@ impl ConfigurationGenerator {
                 return candidate;
             }
 
-            set.clear()
+            set.clear();
         }
     }
 
@@ -184,7 +184,7 @@ impl ConfigurationGenerator {
         true
     }
 
-    fn hash(&self, magic: u64, occupancy: u64) -> usize {
+    const fn hash(&self, magic: u64, occupancy: u64) -> usize {
         magic_hash(self.mask, self.hash_shift, self.hash_mask, magic, occupancy)
     }
 }
@@ -194,7 +194,7 @@ struct MagicGenerator<T: Rng> {
 }
 
 impl<T: Rng> MagicGenerator<T> {
-    pub fn new(rng: T) -> Self {
+    pub const fn new(rng: T) -> Self {
         Self { rng: RefCell::new(rng) }
     }
 

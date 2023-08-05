@@ -41,7 +41,7 @@ const fn expect(nodes: u64) -> PerftResult {
 }
 
 pub mod perft {
-    use std::time::SystemTime;
+    use std::time::{Duration, SystemTime};
     use std::usize;
 
     use marvk_chess_board::board::{Bitboard, Move};
@@ -83,7 +83,7 @@ pub mod perft {
                 expect(4_865_609),
                 expect(119_060_324),
             ],
-        )
+        );
     }
 
     pub fn perft2() {
@@ -96,7 +96,7 @@ pub mod perft {
                 expect(4_085_603),
                 expect(193_690_690),
             ],
-        )
+        );
     }
 
     pub fn perft3() {
@@ -111,7 +111,7 @@ pub mod perft {
                 expect(11_030_083),
                 expect(178_633_661),
             ],
-        )
+        );
     }
 
     pub fn perft4() {
@@ -125,7 +125,7 @@ pub mod perft {
                 expect(15_833_292),
                 expect(706_045_033),
             ],
-        )
+        );
     }
 
     pub fn perft5() {
@@ -139,7 +139,7 @@ pub mod perft {
                 expect(15_833_292),
                 expect(706_045_033),
             ],
-        )
+        );
     }
 
     pub fn perft6() {
@@ -152,7 +152,7 @@ pub mod perft {
                 expect(2_103_487),
                 expect(89_941_194),
             ],
-        )
+        );
     }
 
     pub fn perft7() {
@@ -165,7 +165,7 @@ pub mod perft {
                 expect(3_894_594),
                 expect(164_075_551),
             ],
-        )
+        );
     }
 
     fn run_perft(fen_string: &str, expect: &[PerftResult]) {
@@ -186,7 +186,7 @@ pub mod perft {
         let nodes: u64 = expect.iter().map(|e| e.nodes).sum();
 
         assert_eq!(actual, expect, "Failed for {}", fen_string);
-        let nps = nodes as f64 / start.elapsed().unwrap().as_micros() as f64;
+        let nps = nodes as f64 / start.elapsed().unwrap_or(Duration::ZERO).as_micros() as f64;
         println!("{:?} - {:.1} MM NPS", start.elapsed(), nps);
     }
 
@@ -213,5 +213,5 @@ pub mod perft {
 }
 
 fn main() {
-    perft::run_all()
+    perft::run_all();
 }
