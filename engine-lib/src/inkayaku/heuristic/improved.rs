@@ -1,7 +1,10 @@
-use marvk_chess_board::board::Bitboard;
-use crate::inkayaku::heuristic::{Heuristic, mirror_and_flip_sign, PieceCounts};
+use std::cmp::{max, min};
 
-pub struct ImprovedHeuristic {}
+use marvk_chess_board::board::Bitboard;
+use marvk_chess_board::board::constants::ZobristHash;
+
+use crate::inkayaku::heuristic::{Heuristic, mirror_and_flip_sign, PieceCounts};
+use crate::inkayaku::table::HashTable;
 
 const QUEEN_VALUE: u32 = 900;
 const ROOK_VALUE: u32 = 500;
@@ -97,32 +100,44 @@ const WHITE_TABLES: [[[i32; 64]; 6]; 2] = [
 
 const BLACK_TABLES: [[[i32; 64]; 6]; 2] = mirror_and_flip_sign(WHITE_TABLES);
 
-impl ImprovedHeuristic {
-    fn taper_factor(counts: &PieceCounts) {
-        const PAWN_PHASE: u32 = 0;
-        const KNIGHT_PHASE: u32 = 0;
-        const BISHOP_PHASE: u32 = 0;
-        const ROOK_PHASE: u32 = 0;
-        const QUEEN_PHASE: u32 = 0;
-        const TOTAL_PHASE: u32 = PAWN_PHASE * 16 + KNIGHT_PHASE * 4 + BISHOP_PHASE * 4 + ROOK_PHASE * 4 + QUEEN_PHASE * 2;
+struct PawnEval {}
 
-        let phase = TOTAL_PHASE
-            - counts.pawns() * PAWN_PHASE
-            - counts.knights() * KNIGHT_PHASE
-            - counts.bishops() * BISHOP_PHASE
-            - counts.rooks() * ROOK_PHASE
-            - counts.queens() * QUEEN_PHASE
-            ;
-
-
-    }
+pub struct ImprovedHeuristic {
+    pawn_state_table: HashTable<ZobristHash, PawnEval>,
 }
 
+impl ImprovedHeuristic {}
+
 impl Heuristic for ImprovedHeuristic {
-    fn evaluate_ongoing(&self, bitboard: &Bitboard) -> i32 {
+    fn evaluate_ongoing(&self, bitboard: &Bitboard, zobrist_pawn_hash: ZobristHash) -> i32 {
         let counts = PieceCounts::count_from(bitboard);
+
+        let taper_factor = taper_factor(&counts);
+
 
 
         todo!()
     }
+}
+
+/// Returns the taper factor in `0..=255`, 0 being early game and 255 being end game
+fn taper_factor(counts: &PieceCounts) -> u8 {
+    const PAWN_PHASE: i32 = 0;
+    const KNIGHT_PHASE: i32 = 1;
+    const BISHOP_PHASE: i32 = 1;
+    const ROOK_PHASE: i32 = 2;
+    const QUEEN_PHASE: i32 = 4;
+    const TOTAL_PHASE: i32 = PAWN_PHASE * 16 + KNIGHT_PHASE * 4 + BISHOP_PHASE * 4 + ROOK_PHASE * 4 + QUEEN_PHASE * 2;
+
+    let phase = TOTAL_PHASE
+        - counts.pawns() as i32 * PAWN_PHASE
+        - counts.knights() as i32 * KNIGHT_PHASE
+        - counts.bishops() as i32 * BISHOP_PHASE
+        - counts.rooks() as i32 * ROOK_PHASE
+        - counts.queens() as i32 * QUEEN_PHASE
+        ;
+
+    let result = (phase * 255 + TOTAL_PHASE) / TOTAL_PHASE - 1;
+
+    min(max(result, 0), 255) as u8
 }

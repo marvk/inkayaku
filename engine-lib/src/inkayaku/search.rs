@@ -247,6 +247,7 @@ impl<T: UciTx, H: Heuristic, M: MoveOrder> Search<T, H, M> {
                 self.heuristic.win_score(),
                 self.state.principal_variation.is_some(),
                 self.state.bitboard.calculate_zobrist_hash(),
+                self.state.bitboard.calculate_zobrist_pawn_hash(),
             );
 
             let elapsed = self.state.elapsed();
@@ -283,8 +284,8 @@ impl<T: UciTx, H: Heuristic, M: MoveOrder> Search<T, H, M> {
         (best_move.and_then(|vm| vm.mv).map(move_into_uci_move), self.state.ponder_move().map(move_into_uci_move))
     }
 
-    fn evaluate(&self, color: ColorBits, legal_moves_remaining: bool) -> i32 {
-        calculate_heuristic_factor(color) * self.heuristic.evaluate(&self.state.bitboard, legal_moves_remaining)
+    fn evaluate(&self, color: ColorBits, zobrist_pawn_hash: ZobristHash, legal_moves_remaining: bool) -> i32 {
+        calculate_heuristic_factor(color) * self.heuristic.evaluate(&self.state.bitboard, zobrist_pawn_hash, legal_moves_remaining)
     }
 
     #[inline(always)]
@@ -303,7 +304,7 @@ impl<T: UciTx, H: Heuristic, M: MoveOrder> Search<T, H, M> {
     }
 
     #[allow(clippy::too_many_arguments)]
-    fn search_negamax(&mut self, buffer: &mut Vec<Move>, ply_depth_from_root: usize, max_ply: usize, alpha_original: i32, beta_original: i32, is_pv: bool, zobrist: ZobristHash) -> ValuedMove {
+    fn search_negamax(&mut self, buffer: &mut Vec<Move>, ply_depth_from_root: usize, max_ply: usize, alpha_original: i32, beta_original: i32, is_pv: bool, zobrist_hash: ZobristHash, zobrist_pawn_hash: ZobristHash) -> ValuedMove {
         let color = self.state.bitboard.turn;
 
         let check_flags = self.should_check_flags();
@@ -326,7 +327,7 @@ impl<T: UciTx, H: Heuristic, M: MoveOrder> Search<T, H, M> {
 
         let ply_clock = self.state.bitboard.ply_clock();
         let halfmove_clock = self.state.bitboard.halfmove_clock;
-        self.state.zobrist_history.set(ply_clock, zobrist);
+        self.state.zobrist_history.set(ply_clock, zobrist_hash);
 
         if self.state.zobrist_history.count_repetitions(ply_clock, halfmove_clock as u16) >= 3 {
             let contempt_factor_factor = if ply_depth_from_root % 2 == 0 { 1 } else { -1 };
@@ -334,7 +335,7 @@ impl<T: UciTx, H: Heuristic, M: MoveOrder> Search<T, H, M> {
             return ValuedMove::leaf(self.heuristic.draw_score() + contempt_factor_factor * self.options.contempt_factor);
         }
 
-        let maybe_tt_entry = self.state.transposition_table.get(zobrist);
+        let maybe_tt_entry = self.state.transposition_table.get(zobrist_hash);
 
         let mut alpha = alpha_original;
         let mut beta = beta_original;
@@ -378,10 +379,10 @@ impl<T: UciTx, H: Heuristic, M: MoveOrder> Search<T, H, M> {
 
             if legal_moves_remaining && Bitboard::is_any_move_non_quiescent(buffer) {
                 self.state.metrics.increment_started_quiescence_search();
-                return self.search_quiescence(0, buffer, alpha, beta);
+                return self.search_quiescence(0, buffer, alpha, beta, zobrist_pawn_hash);
             }
 
-            let value = self.evaluate(color, legal_moves_remaining);
+            let value = self.evaluate(color, zobrist_pawn_hash, legal_moves_remaining);
             return ValuedMove::leaf(value);
         }
 
@@ -403,11 +404,20 @@ impl<T: UciTx, H: Heuristic, M: MoveOrder> Search<T, H, M> {
                 continue;
             }
 
-            let (zobrist_xor, _) = Bitboard::zobrist_xor(*mv);
+            let (zobrist_xor, zobrist_pawn_xor) = Bitboard::zobrist_xor(*mv);
 
             legal_moves_encountered = true;
 
-            let child = self.search_negamax(&mut next_buffer, ply_depth_from_root + 1, max_ply, -beta, -alpha, is_pv && pv_move.map(|pv_mv| pv_mv.bits == mv.bits).unwrap_or(false), zobrist ^ zobrist_xor);
+            let child = self.search_negamax(
+                &mut next_buffer,
+                ply_depth_from_root + 1,
+                max_ply,
+                -beta,
+                -alpha,
+                is_pv && pv_move.map(|pv_mv| pv_mv.bits == mv.bits).unwrap_or(false),
+                zobrist_hash ^ zobrist_xor,
+                zobrist_pawn_hash ^ zobrist_pawn_xor,
+            );
 
             if self.flags.stop_as_soon_as_possible {
                 return ValuedMove::new(0, None, None);
@@ -432,7 +442,7 @@ impl<T: UciTx, H: Heuristic, M: MoveOrder> Search<T, H, M> {
         }
 
         if !legal_moves_encountered {
-            let value = self.evaluate(color, false);
+            let value = self.evaluate(color, zobrist_pawn_hash, false);
             return ValuedMove::leaf(value);
         }
 
@@ -447,7 +457,7 @@ impl<T: UciTx, H: Heuristic, M: MoveOrder> Search<T, H, M> {
                 Exact
             };
 
-            self.state.transposition_table.put(zobrist, TtEntry::new(result.clone(), zobrist, remaining_draft, best_value, node_type));
+            self.state.transposition_table.put(zobrist_hash, TtEntry::new(result.clone(), zobrist_hash, remaining_draft, best_value, node_type));
         }
 
         // TODO transposition table
@@ -455,12 +465,12 @@ impl<T: UciTx, H: Heuristic, M: MoveOrder> Search<T, H, M> {
         result
     }
 
-    fn search_quiescence(&mut self, depth: u32, buffer: &mut Vec<Move>, alpha_original: i32, beta_original: i32) -> ValuedMove {
+    fn search_quiescence(&mut self, depth: u32, buffer: &mut Vec<Move>, alpha_original: i32, beta_original: i32, zobrist_pawn_hash: ZobristHash) -> ValuedMove {
         let color = self.state.bitboard.turn;
 
         // TODO take attack moves from buffer on first call
 
-        let standing_pat = self.evaluate(color, true);
+        let standing_pat = self.evaluate(color, zobrist_pawn_hash, true);
 
         if standing_pat >= beta_original {
             self.state.metrics.register_quiescence_termination(depth as usize);
@@ -488,7 +498,7 @@ impl<T: UciTx, H: Heuristic, M: MoveOrder> Search<T, H, M> {
 
             self.state.metrics.increment_quiescence_nodes();
 
-            let child = self.search_quiescence(depth + 1, &mut next_buffer, -beta_original, -alpha);
+            let child = self.search_quiescence(depth + 1, &mut next_buffer, -beta_original, -alpha, zobrist_pawn_hash ^ Bitboard::zobrist_xor(*mv).1);
             let value = -child.value;
 
             self.state.bitboard.unmake(*mv);

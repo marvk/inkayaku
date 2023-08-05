@@ -6,7 +6,7 @@ use marvk_chess_board::board::constants::ZobristHash;
 pub mod killer;
 pub mod transposition;
 
-struct HashTable<K: Eq + Hash + Copy, V> {
+pub struct HashTable<K: Eq + Hash + Copy, V> {
     capacity: usize,
     entry_list: LinkedList<K>,
     entry_map: HashMap<K, V, nohash_hasher::BuildNoHashHasher<K>>,

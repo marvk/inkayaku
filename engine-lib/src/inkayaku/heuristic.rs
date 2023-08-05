@@ -1,5 +1,5 @@
 use marvk_chess_board::board::{Bitboard, PlayerState};
-use marvk_chess_board::board::constants::{BLACK, WHITE};
+use marvk_chess_board::board::constants::{BLACK, WHITE, ZobristHash};
 use marvk_chess_uci::uci::Score;
 use marvk_chess_uci::uci::Score::{Centipawn, Mate};
 
@@ -19,12 +19,12 @@ pub trait Heuristic {
     fn is_checkmate(&self, value: i32) -> bool {
         value > self.win_score() - Self::MAX_FULL_MOVES || value < self.loss_score() + Self::MAX_FULL_MOVES
     }
-    fn evaluate(&self, bitboard: &Bitboard, legal_moves_remaining: bool) -> i32 {
+    fn evaluate(&self, bitboard: &Bitboard, zobrist_pawn_hash: ZobristHash, legal_moves_remaining: bool) -> i32 {
         if legal_moves_remaining {
             if bitboard.halfmove_clock >= Self::MAX_HALF_MOVES {
                 self.draw_score()
             } else {
-                self.evaluate_ongoing(bitboard)
+                self.evaluate_ongoing(bitboard, zobrist_pawn_hash)
             }
         } else {
             match (bitboard.is_current_in_check(), bitboard.turn) {
@@ -44,7 +44,7 @@ pub trait Heuristic {
         }
     }
 
-    fn evaluate_ongoing(&self, bitboard: &Bitboard) -> i32;
+    fn evaluate_ongoing(&self, bitboard: &Bitboard, zobrist_pawn_hash: ZobristHash) -> i32;
 }
 
 const fn mirror_and_flip_sign<const M: usize, const T: usize>(tables: [[[i32; 64]; M]; T]) -> [[[i32; 64]; M]; T] {

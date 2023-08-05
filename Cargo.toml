@@ -6,7 +6,10 @@ members = [
     "core",
     "engine-app",
     "engine-lib",
+    "engine-piece-square-table-generator",
     "lichess-api",
     "lichess-bot",
+    "pgn",
+    "pgn-test",
     "uci",
 ]

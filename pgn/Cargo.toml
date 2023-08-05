@@ -1,0 +1,12 @@
+[package]
+name = "marvk-chess-pgn"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+marvk-chess-core = { path = "../core" }
+marvk-chess-board = { path = "../board" }
+zstd = "0.12.4"
+rand = "0.8.5"

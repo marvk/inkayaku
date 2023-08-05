@@ -2,6 +2,9 @@ use std::char::from_digit;
 use std::fmt::{Debug, Display, Formatter};
 use std::str::FromStr;
 
+use lazy_static::lazy_static;
+use regex::Regex;
+
 use marvk_chess_core::constants::color::Color;
 use marvk_chess_core::constants::colored_piece::ColoredPiece;
 use marvk_chess_core::constants::file::File;
@@ -19,6 +22,10 @@ use crate::board::zobrist::Zobrist;
 pub mod constants;
 mod precalculated;
 mod zobrist;
+
+lazy_static! {
+    static ref PGN_REGEX: Regex = Regex::new("^(?:(?:(?P<piece>[BNRQK])?(?P<from_file>[a-h])?(?P<from_rank>[1-8])?(?P<takes>x)?(?P<target>[a-h][1-8])(?:=(?P<promotion>[BNRQ]))?)|(?P<castle>O-O(?P<long_castle>-O)?))(?P<check>[+#])?(?P<annotation>[!?]+)?$").unwrap();
+}
 
 #[derive(Eq, PartialEq, Hash, Copy, Clone, Default)]
 pub struct Move {
@@ -163,6 +170,10 @@ pub enum MoveFromUciError {
     MoveIsNotValid(Move),
 }
 
+pub enum PgnParseError {
+    Error
+}
+
 #[derive(Eq, PartialEq, Copy, Clone, Debug, Default)]
 pub struct PlayerState {
     occupancy: [OccupancyBits; 7],
@@ -191,7 +202,7 @@ impl PlayerState {
     fn pawns_ref(&mut self) -> &mut OccupancyBits { &mut self.occupancy[PAWN as usize] }
 
     #[inline(always)]
-    fn occupancy(&self, piece: PieceBits) -> OccupancyBits { self.occupancy[piece as usize] }
+    pub fn occupancy(&self, piece: PieceBits) -> OccupancyBits { self.occupancy[piece as usize] }
     #[inline(always)]
     pub fn kings(&self) -> OccupancyBits { self.occupancy[KING as usize] }
     #[inline(always)]
@@ -1207,6 +1218,168 @@ impl Bitboard {
         Ok(())
     }
 
+    pub fn pgn_to_bb(&mut self, pgn: &str) -> Result<Move, PgnParseError> {
+        let result = if let Some(captures) = PGN_REGEX.captures(pgn) {
+            let moves = self.generate_legal_moves();
+
+            if let Some(piece) = captures.name("piece") {
+                let takes = captures.name("takes");
+                let from_rank = captures.name("from_rank");
+                let from_file = captures.name("from_file");
+                let target = captures.name("target").ok_or(PgnParseError::Error)?;
+
+
+                let moves = moves
+                    .into_iter()
+                    .filter(|mv| {
+                        match (piece.as_str(), mv.get_piece_moved()) {
+                            ("K", KING) => (),
+                            ("Q", QUEEN) => (),
+                            ("R", ROOK) => (),
+                            ("B", BISHOP) => (),
+                            ("N", KNIGHT) => (),
+                            _ => { return false; }
+                        }
+
+                        if let Some(takes) = takes {
+                            if !mv.is_attack() {
+                                return false;
+                            }
+                        }
+
+                        if let Some(from_file) = from_file {
+                            let file = match from_file.as_str() {
+                                "a" => FILE_A_OCCUPANCY,
+                                "b" => FILE_B_OCCUPANCY,
+                                "c" => FILE_C_OCCUPANCY,
+                                "d" => FILE_D_OCCUPANCY,
+                                "e" => FILE_E_OCCUPANCY,
+                                "f" => FILE_F_OCCUPANCY,
+                                "g" => FILE_G_OCCUPANCY,
+                                "h" => FILE_H_OCCUPANCY,
+                                _ => { return false; }
+                            };
+
+                            if square_mask_from_shift(mv.get_source_square()) & file == 0 {
+                                return false;
+                            }
+                        }
+
+                        if let Some(from_rank) = from_rank {
+                            let file = match from_rank.as_str() {
+                                "1" => RANK_1_OCCUPANCY,
+                                "2" => RANK_2_OCCUPANCY,
+                                "3" => RANK_3_OCCUPANCY,
+                                "4" => RANK_4_OCCUPANCY,
+                                "5" => RANK_5_OCCUPANCY,
+                                "6" => RANK_6_OCCUPANCY,
+                                "7" => RANK_7_OCCUPANCY,
+                                "8" => RANK_8_OCCUPANCY,
+                                _ => { return false; }
+                            };
+
+                            if square_mask_from_shift(mv.get_source_square()) & file == 0 {
+                                return false;
+                            }
+                        }
+
+                        let target = square_shift_from_fen(target.as_str());
+
+                        mv.get_target_square() == target
+                    })
+                    .collect::<Vec<_>>();
+
+                Ok(moves)
+            } else if captures.name("castle").is_some() {
+                let long_castle = captures.name("long_castle").is_some();
+
+                let moves = moves
+                    .into_iter()
+                    .filter(|mv| mv.is_castle_move())
+                    .filter(|mv| {
+                        let file = if long_castle { FILE_C_OCCUPANCY } else { FILE_G_OCCUPANCY };
+
+                        (square_mask_from_shift(mv.get_target_square()) & file) != 0
+                    })
+                    .collect::<Vec<_>>();
+
+                Ok(moves)
+            } else if let Some(target) = captures.name("target") {
+                let from_file = captures.name("from_file");
+                let takes = captures.name("takes");
+                let promotion = captures.name("promotion");
+
+
+                let moves = moves
+                    .into_iter()
+                    .filter(|mv| {
+                        if mv.get_piece_moved() != PAWN {
+                            return false;
+                        }
+
+                        if let Some(takes) = takes {
+                            if !mv.is_attack() {
+                                return false;
+                            }
+                        }
+
+                        if let Some(promotion) = promotion {
+                            if !mv.is_promotion() {
+                                return false;
+                            }
+
+                            match (promotion.as_str(), mv.get_promotion_piece()) {
+                                ("B", BISHOP) => (),
+                                ("N", KNIGHT) => (),
+                                ("R", ROOK) => (),
+                                ("Q", QUEEN) => (),
+                                _ => { return false; }
+                            }
+                        }
+
+                        if let Some(from_file) = from_file {
+                            let file = match from_file.as_str() {
+                                "a" => FILE_A_OCCUPANCY,
+                                "b" => FILE_B_OCCUPANCY,
+                                "c" => FILE_C_OCCUPANCY,
+                                "d" => FILE_D_OCCUPANCY,
+                                "e" => FILE_E_OCCUPANCY,
+                                "f" => FILE_F_OCCUPANCY,
+                                "g" => FILE_G_OCCUPANCY,
+                                "h" => FILE_H_OCCUPANCY,
+                                _ => { return false; }
+                            };
+
+                            if square_mask_from_shift(mv.get_source_square()) & file == 0 {
+                                return false;
+                            }
+                        }
+
+                        let target = square_shift_from_fen(target.as_str());
+
+                        mv.get_target_square() == target
+                    })
+                    .collect::<Vec<_>>();
+
+                Ok(moves)
+            } else {
+                Err(PgnParseError::Error)
+            }
+        } else {
+            Err(PgnParseError::Error)
+        };
+
+        if let Ok(result) = result {
+            let moves = result.into_iter().filter(|mv| self.is_move_legal(*mv)).collect::<Vec<_>>();
+            if moves.len() != 1 {
+                return Err(PgnParseError::Error);
+            }
+            Ok(moves[0])
+        } else {
+            Err(result.unwrap_err())
+        }
+    }
+
     pub fn uci_to_pgn(&mut self, uci: &str) -> Result<String, MoveFromUciError> {
         let uci = uci.trim();
         let moves = self.generate_pseudo_legal_moves();
@@ -1752,4 +1925,5 @@ mod tests {
         }
     }
 }
+
 

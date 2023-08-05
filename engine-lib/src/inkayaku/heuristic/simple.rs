@@ -1,6 +1,7 @@
 use marvk_chess_board::board::{Bitboard, PlayerState};
-use marvk_chess_board::board::constants::{BISHOP, GameStageBits, KING, KNIGHT, LATE, MID, OccupancyBits, PAWN, QUEEN, ROOK, WHITE};
+use marvk_chess_board::board::constants::{BISHOP, GameStageBits, KING, KNIGHT, LATE, MID, OccupancyBits, PAWN, QUEEN, ROOK, WHITE, ZobristHash};
 use marvk_chess_board::mask_and_shift_from_lowest_one_bit;
+
 use crate::inkayaku::heuristic::{Heuristic, mirror_and_flip_sign};
 
 const QUEEN_VALUE: u32 = 900;
@@ -163,7 +164,7 @@ impl SimpleHeuristic {
 }
 
 impl Heuristic for SimpleHeuristic {
-    fn evaluate_ongoing(&self, bitboard: &Bitboard) -> i32 {
+    fn evaluate_ongoing(&self, bitboard: &Bitboard, _: ZobristHash) -> i32 {
         let my_sum = Self::piece_value(&bitboard.white);
         let their_sum = Self::piece_value(&bitboard.black);
         let psv = Self::piece_square_value(bitboard);
@@ -175,6 +176,7 @@ impl Heuristic for SimpleHeuristic {
 #[cfg(test)]
 mod test {
     use marvk_chess_board::board::Bitboard;
+
     use crate::inkayaku::heuristic::Heuristic;
     use crate::inkayaku::heuristic::simple::SimpleHeuristic;
 
@@ -187,7 +189,7 @@ mod test {
 
     #[test]
     fn evaluate() {
-        println!("{}", SimpleHeuristic {}.evaluate(&Bitboard::from_fen_string_unchecked("rn2k2r/ppp2ppp/8/3pPP2/3P1q2/P1KB4/P1P4P/3R2N1 b kq - 0 14"), true));
-        println!("{}", SimpleHeuristic {}.evaluate(&Bitboard::from_fen_string_unchecked("rn2k2r/ppp2ppp/8/3pPP2/3P1q2/P1KB4/P1P4P/3R2N1 w kq - 0 14"), true));
+        println!("{}", SimpleHeuristic {}.evaluate(&Bitboard::from_fen_string_unchecked("rn2k2r/ppp2ppp/8/3pPP2/3P1q2/P1KB4/P1P4P/3R2N1 b kq - 0 14"), 0, true));
+        println!("{}", SimpleHeuristic {}.evaluate(&Bitboard::from_fen_string_unchecked("rn2k2r/ppp2ppp/8/3pPP2/3P1q2/P1KB4/P1P4P/3R2N1 w kq - 0 14"), 0, true));
     }
 }

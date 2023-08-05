@@ -1,10 +1,8 @@
 [package]
-name = "marvk-chess-board"
+name = "marvk-chess-engine-piece-square-table-generator"
 version = "0.1.0"
 edition = "2021"
 
 [dependencies]
 marvk-chess-core = { path = "../core" }
-rand = "0.8.5"
-regex = "1.6.0"
-lazy_static = "1.4.0"
+zstd = "0.12.4"

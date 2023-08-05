@@ -268,6 +268,10 @@ pub const CASTLE_MOVE_FALSE_MASK: u64 = 0;
 pub const EN_PASSANT_ATTACK_TRUE_MASK: u64 = EN_PASSANT_ATTACK_MASK;
 pub const EN_PASSANT_ATTACK_FALSE_MASK: u64 = 0;
 
+pub fn square_mask_from_shift(square_shift: SquareShiftBits) -> SquareMaskBits {
+    1 << square_shift
+}
+
 // #[inline(always)]
 pub fn square_mask_from_index(file_index: u32, rank_index: u32) -> SquareMaskBits {
     1 << square_shift_from_index(file_index, rank_index)
