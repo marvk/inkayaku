@@ -15,9 +15,9 @@ impl Rank {
     pub const RANK_2: Self = Self { fen: '2', index: 6 };
     pub const RANK_1: Self = Self { fen: '1', index: 7 };
 
-    pub const RANKS: [Self; 8] = [Self::RANK_1, Self::RANK_2, Self::RANK_3, Self::RANK_4, Self::RANK_5, Self::RANK_6, Self::RANK_7, Self::RANK_8, ];
+    pub const RANKS: [Self; 8] = [Self::RANK_1, Self::RANK_2, Self::RANK_3, Self::RANK_4, Self::RANK_5, Self::RANK_6, Self::RANK_7, Self::RANK_8];
 
-    pub fn by_index<'a>(index: usize) -> &'a Self {
+    pub const fn by_index<'a>(index: usize) -> &'a Self {
         &Self::RANKS[index]
     }
 }

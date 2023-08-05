@@ -93,7 +93,6 @@ enum PgnExclusion {
     TimeControlNotParsable(String),
     TimeNotParsable(String),
     TimeTooLow(u32),
-
 }
 
 fn filter_pgn(pgn: &PgnRaw) -> Result<(), PgnExclusion> {

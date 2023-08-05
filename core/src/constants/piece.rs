@@ -16,11 +16,11 @@ impl Piece {
     pub const ROOK: Self = Self { name: "Rook", fen: 'r', index: 4 };
     pub const QUEEN: Self = Self { name: "Queen", fen: 'q', index: 5 };
     pub const KING: Self = Self { name: "King", fen: 'k', index: 6 };
-    
-    pub const VALUES: [Self;6] = [Self::PAWN, Self::KNIGHT, Self::BISHOP, Self::ROOK, Self::QUEEN, Self::KING];
-    
-    pub fn as_color(&self, color: Color) -> ColoredPiece {
-        match color {
+
+    pub const VALUES: [Self; 6] = [Self::PAWN, Self::KNIGHT, Self::BISHOP, Self::ROOK, Self::QUEEN, Self::KING];
+
+    pub fn as_color(&self, color: &Color) -> ColoredPiece {
+        match *color {
             Color::WHITE => self.as_white(),
             Color::BLACK => self.as_black(),
             _ => panic!(),
@@ -55,9 +55,7 @@ impl Piece {
         self.as_black().fen
     }
 
-    pub const PIECES: [Self; 6] = [Self::PAWN, Self::KNIGHT, Self::BISHOP, Self::ROOK, Self::QUEEN, Self::KING];
-
-    pub fn by_char(c: char) -> Option<Piece> {
+    pub const fn by_char(c: char) -> Option<Self> {
         match c {
             'K' | 'k' => Some(Self::KING),
             'Q' | 'q' => Some(Self::QUEEN),
@@ -69,7 +67,7 @@ impl Piece {
         }
     }
 
-    pub fn by_index(index: usize) -> Option<Piece> {
+    pub const fn by_index(index: usize) -> Option<Self> {
         match index {
             1 => Some(Self::PAWN),
             2 => Some(Self::KNIGHT),

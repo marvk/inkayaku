@@ -107,7 +107,7 @@ impl Square {
         format!("{}{}", self.file.fen, self.rank.fen)
     }
 
-    pub const SQUARES: [Self; 64] = [
+    pub const VALUES: [Self; 64] = [
         Self::A8, Self::B8, Self::C8, Self::D8, Self::E8, Self::F8, Self::G8, Self::H8,
         Self::A7, Self::B7, Self::C7, Self::D7, Self::E7, Self::F7, Self::G7, Self::H7,
         Self::A6, Self::B6, Self::C6, Self::D6, Self::E6, Self::F6, Self::G6, Self::H6,
@@ -133,7 +133,8 @@ impl Square {
         Self::by_index(to_square_index_from_indices(file_index, rank_index))
     }
 
-    pub const fn by_index(index: usize) -> Option<Square> {
+    // TODO grab from array
+    pub const fn by_index(index: usize) -> Option<Self> {
         match index {
             0 => Some(Self::A8),
             1 => Some(Self::B8),
@@ -203,11 +204,11 @@ impl Square {
         }
     }
 
-    pub fn by(file: File, rank: Rank) -> Square {
+    pub fn by(file: File, rank: Rank) -> Self {
         Self::by_indices(file.index as usize, rank.index as usize).unwrap()
     }
 
-    pub const fn translate(&self, direction: &Direction) -> Option<Square> {
+    pub const fn translate(&self, direction: &Direction) -> Option<Self> {
         let file = self.file.index as i32 + direction.d_file;
         let rank = self.rank.index as i32 + direction.d_rank;
 

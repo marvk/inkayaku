@@ -215,7 +215,7 @@ mod tests {
     use crate::board::precalculated::magic::generator::{GeneratorConfiguration, ConfigurationGenerator};
 
     fn generate_magic_hashes_for(piece: Piece) -> [u64; 64] {
-        Square::SQUARES.iter().map(|&square| { ConfigurationGenerator::new(piece, square).generate_all_attacks().magic }).collect::<Vec<_>>().try_into().unwrap()
+        Square::VALUES.iter().map(|&square| { ConfigurationGenerator::new(piece, square).generate_all_attacks().magic }).collect::<Vec<_>>().try_into().unwrap()
     }
 
     #[test]
@@ -229,7 +229,7 @@ mod tests {
     }
 
     fn generate_magics_for(piece: Piece, magic_hashes: [u64; 64]) -> [GeneratorConfiguration; 64] {
-        Square::SQUARES.iter().enumerate().map(|(index, &square)| { ConfigurationGenerator::new(piece, square).generate_all_attacks_with_magic(magic_hashes[index]) }).collect::<Vec<_>>().try_into().unwrap()
+        Square::VALUES.iter().enumerate().map(|(index, &square)| { ConfigurationGenerator::new(piece, square).generate_all_attacks_with_magic(magic_hashes[index]) }).collect::<Vec<_>>().try_into().unwrap()
     }
 
     const BISHOP_MAGIC_HASHES: [u64; 64] = [

@@ -37,11 +37,12 @@ impl ColoredPiece {
         format!("{} {}", self.color.name, self.piece.name)
     }
 
-    pub fn by_index<'a>(color_index: usize, piece_index: usize) -> &'a ColoredPiece {
+    // TODO fix lifetimes
+    pub const fn by_index<'a>(color_index: usize, piece_index: usize) -> &'a Self {
         &Self::VALUES[color_index + piece_index * 2 - 2]
     }
 
-    pub fn by<'a>(color: Color, piece: Piece) -> &'a ColoredPiece {
+    pub const fn by<'a>(color: &Color, piece: &Piece) -> &'a Self {
         Self::by_index(color.index as usize, piece.index as usize)
     }
 }

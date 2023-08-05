@@ -36,7 +36,7 @@ const fn build_nonmagics(directions: &[Direction]) -> Nonmagics {
 }
 
 const fn attack_occupations(square_shift: usize, directions: &[Direction]) -> u64 {
-    let square = Square::SQUARES[square_shift];
+    let square = Square::VALUES[square_shift];
 
     let mut result: u64 = 0;
 

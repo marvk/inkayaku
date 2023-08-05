@@ -1,4 +1,4 @@
-#![allow(dead_code)]
+#![allow(dead_code, clippy::unreadable_literal)]
 
 use marvk_chess_core::constants::to_square_index_from_indices;
 
@@ -268,17 +268,17 @@ pub const CASTLE_MOVE_FALSE_MASK: u64 = 0;
 pub const EN_PASSANT_ATTACK_TRUE_MASK: u64 = EN_PASSANT_ATTACK_MASK;
 pub const EN_PASSANT_ATTACK_FALSE_MASK: u64 = 0;
 
-pub fn square_mask_from_shift(square_shift: SquareShiftBits) -> SquareMaskBits {
+pub const fn square_mask_from_shift(square_shift: SquareShiftBits) -> SquareMaskBits {
     1 << square_shift
 }
 
 // #[inline(always)]
-pub fn square_mask_from_index(file_index: u32, rank_index: u32) -> SquareMaskBits {
+pub const fn square_mask_from_index(file_index: u32, rank_index: u32) -> SquareMaskBits {
     1 << square_shift_from_index(file_index, rank_index)
 }
 
 // #[inline(always)]
-pub fn square_shift_from_index(file_index: u32, rank_index: u32) -> SquareShiftBits {
+pub const fn square_shift_from_index(file_index: u32, rank_index: u32) -> SquareShiftBits {
     to_square_index_from_indices(file_index as usize, rank_index as usize) as SquareShiftBits
 }
 

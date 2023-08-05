@@ -13,6 +13,7 @@ use marvk_chess_core::constants::square::Square;
 use marvk_chess_core::fen::{Fen, FenParseError};
 
 use crate::{mask_and_shift_from_lowest_one_bit, opposite_color, piece_to_string, square_to_string};
+#[allow(clippy::wildcard_imports)]
 use crate::board::constants::*;
 use crate::board::MoveFromUciError::{MoveDoesNotExist, MoveIsNotValid};
 use crate::board::precalculated::magic::{BISHOP_MAGICS, Magics, ROOK_MAGICS, UnsafeMagicsExt};
@@ -24,6 +25,7 @@ mod precalculated;
 mod zobrist;
 
 lazy_static! {
+#[allow(clippy::unwrap_used)]
     static ref PGN_REGEX: Regex = Regex::new("^(?:(?:(?P<piece>[BNRQK])?(?P<from_file>[a-h])?(?P<from_rank>[1-8])?(?P<takes>x)?(?P<target>[a-h][1-8])(?:=(?P<promotion>[BNRQ]))?)|(?P<castle>O-O(?P<long_castle>-O)?))(?P<check>[+#])?(?P<annotation>[!?]+)?$").unwrap();
 }
 
@@ -35,37 +37,37 @@ pub struct Move {
 
 impl Move {
     #[inline(always)]
-    pub fn get_piece_moved(&self) -> PieceBits { (self.bits & PIECE_MOVED_MASK) >> PIECE_MOVED_SHIFT }
+    pub const fn get_piece_moved(&self) -> PieceBits { (self.bits & PIECE_MOVED_MASK) >> PIECE_MOVED_SHIFT }
     #[inline(always)]
-    pub fn get_piece_attacked(&self) -> PieceBits { (self.bits & PIECE_ATTACKED_MASK) >> PIECE_ATTACKED_SHIFT }
+    pub const fn get_piece_attacked(&self) -> PieceBits { (self.bits & PIECE_ATTACKED_MASK) >> PIECE_ATTACKED_SHIFT }
     #[inline(always)]
-    pub fn get_self_lost_king_side_castle(&self) -> u64 { (self.bits & SELF_LOST_KING_SIDE_CASTLE_MASK) >> SELF_LOST_KING_SIDE_CASTLE_SHIFT }
+    pub const fn get_self_lost_king_side_castle(&self) -> u64 { (self.bits & SELF_LOST_KING_SIDE_CASTLE_MASK) >> SELF_LOST_KING_SIDE_CASTLE_SHIFT }
     #[inline(always)]
-    pub fn get_self_lost_queen_side_castle(&self) -> u64 { (self.bits & SELF_LOST_QUEEN_SIDE_CASTLE_MASK) >> SELF_LOST_QUEEN_SIDE_CASTLE_SHIFT }
+    pub const fn get_self_lost_queen_side_castle(&self) -> u64 { (self.bits & SELF_LOST_QUEEN_SIDE_CASTLE_MASK) >> SELF_LOST_QUEEN_SIDE_CASTLE_SHIFT }
     #[inline(always)]
-    pub fn get_opponent_lost_king_side_castle(&self) -> u64 { (self.bits & OPPONENT_LOST_KING_SIDE_CASTLE_MASK) >> OPPONENT_LOST_KING_SIDE_CASTLE_SHIFT }
+    pub const fn get_opponent_lost_king_side_castle(&self) -> u64 { (self.bits & OPPONENT_LOST_KING_SIDE_CASTLE_MASK) >> OPPONENT_LOST_KING_SIDE_CASTLE_SHIFT }
     #[inline(always)]
-    pub fn get_opponent_lost_queen_side_castle(&self) -> u64 { (self.bits & OPPONENT_LOST_QUEEN_SIDE_CASTLE_MASK) >> OPPONENT_LOST_QUEEN_SIDE_CASTLE_SHIFT }
+    pub const fn get_opponent_lost_queen_side_castle(&self) -> u64 { (self.bits & OPPONENT_LOST_QUEEN_SIDE_CASTLE_MASK) >> OPPONENT_LOST_QUEEN_SIDE_CASTLE_SHIFT }
     #[inline(always)]
-    pub fn get_castle_move(&self) -> u64 { (self.bits & CASTLE_MOVE_MASK) >> CASTLE_MOVE_SHIFT }
+    pub const fn get_castle_move(&self) -> u64 { (self.bits & CASTLE_MOVE_MASK) >> CASTLE_MOVE_SHIFT }
     #[inline(always)]
-    pub fn get_en_passant_attack(&self) -> u64 { (self.bits & EN_PASSANT_ATTACK_MASK) >> EN_PASSANT_ATTACK_SHIFT }
+    pub const fn get_en_passant_attack(&self) -> u64 { (self.bits & EN_PASSANT_ATTACK_MASK) >> EN_PASSANT_ATTACK_SHIFT }
     #[inline(always)]
-    pub fn get_source_square(&self) -> SquareShiftBits { ((self.bits & SOURCE_SQUARE_MASK) >> SOURCE_SQUARE_SHIFT) as SquareShiftBits }
+    pub const fn get_source_square(&self) -> SquareShiftBits { ((self.bits & SOURCE_SQUARE_MASK) >> SOURCE_SQUARE_SHIFT) as SquareShiftBits }
     #[inline(always)]
-    pub fn get_target_square(&self) -> SquareShiftBits { ((self.bits & TARGET_SQUARE_MASK) >> TARGET_SQUARE_SHIFT) as SquareShiftBits }
+    pub const fn get_target_square(&self) -> SquareShiftBits { ((self.bits & TARGET_SQUARE_MASK) >> TARGET_SQUARE_SHIFT) as SquareShiftBits }
     #[inline(always)]
-    pub fn get_halfmove_reset(&self) -> u64 { (self.bits & HALFMOVE_RESET_MASK) >> HALFMOVE_RESET_SHIFT }
+    pub const fn get_halfmove_reset(&self) -> u64 { (self.bits & HALFMOVE_RESET_MASK) >> HALFMOVE_RESET_SHIFT }
     #[inline(always)]
-    pub fn get_previous_halfmove(&self) -> u32 { ((self.bits & PREVIOUS_HALFMOVE_MASK) >> PREVIOUS_HALFMOVE_SHIFT) as u32 }
+    pub const fn get_previous_halfmove(&self) -> u32 { ((self.bits & PREVIOUS_HALFMOVE_MASK) >> PREVIOUS_HALFMOVE_SHIFT) as u32 }
     #[inline(always)]
-    pub fn get_previous_en_passant_square(&self) -> SquareShiftBits { ((self.bits & PREVIOUS_EN_PASSANT_SQUARE_MASK) >> PREVIOUS_EN_PASSANT_SQUARE_SHIFT) as SquareShiftBits }
+    pub const fn get_previous_en_passant_square(&self) -> SquareShiftBits { ((self.bits & PREVIOUS_EN_PASSANT_SQUARE_MASK) >> PREVIOUS_EN_PASSANT_SQUARE_SHIFT) as SquareShiftBits }
     #[inline(always)]
-    pub fn get_next_en_passant_square(&self) -> SquareShiftBits { ((self.bits & NEXT_EN_PASSANT_SQUARE_MASK) >> NEXT_EN_PASSANT_SQUARE_SHIFT) as SquareShiftBits }
+    pub const fn get_next_en_passant_square(&self) -> SquareShiftBits { ((self.bits & NEXT_EN_PASSANT_SQUARE_MASK) >> NEXT_EN_PASSANT_SQUARE_SHIFT) as SquareShiftBits }
     #[inline(always)]
-    pub fn get_promotion_piece(&self) -> PieceBits { (self.bits & PROMOTION_PIECE_MASK) >> PROMOTION_PIECE_SHIFT }
+    pub const fn get_promotion_piece(&self) -> PieceBits { (self.bits & PROMOTION_PIECE_MASK) >> PROMOTION_PIECE_SHIFT }
     #[inline(always)]
-    pub fn get_side_to_move(&self) -> ColorBits { ((self.bits & SIDE_TO_MOVE_MASK) >> SIDE_TO_MOVE_SHIFT) as ColorBits }
+    pub const fn get_side_to_move(&self) -> ColorBits { ((self.bits & SIDE_TO_MOVE_MASK) >> SIDE_TO_MOVE_SHIFT) as ColorBits }
 
     #[inline(always)]
     pub fn set_piece_moved(&mut self, value: PieceBits) { self.bits |= value << PIECE_MOVED_SHIFT }
@@ -101,23 +103,23 @@ impl Move {
     pub fn set_side_to_move(&mut self, value: ColorBits) { self.bits |= (value as u64) << SIDE_TO_MOVE_SHIFT }
 
     #[inline(always)]
-    pub fn is_self_lost_king_side_castle(&self) -> bool { self.get_self_lost_king_side_castle() != 0 }
+    pub const fn is_self_lost_king_side_castle(&self) -> bool { self.get_self_lost_king_side_castle() != 0 }
     #[inline(always)]
-    pub fn is_self_lost_queen_side_castle(&self) -> bool { self.get_self_lost_queen_side_castle() != 0 }
+    pub const fn is_self_lost_queen_side_castle(&self) -> bool { self.get_self_lost_queen_side_castle() != 0 }
     #[inline(always)]
-    pub fn is_opponent_lost_king_side_castle(&self) -> bool { self.get_opponent_lost_king_side_castle() != 0 }
+    pub const fn is_opponent_lost_king_side_castle(&self) -> bool { self.get_opponent_lost_king_side_castle() != 0 }
     #[inline(always)]
-    pub fn is_opponent_lost_queen_side_castle(&self) -> bool { self.get_opponent_lost_queen_side_castle() != 0 }
+    pub const fn is_opponent_lost_queen_side_castle(&self) -> bool { self.get_opponent_lost_queen_side_castle() != 0 }
     #[inline(always)]
-    pub fn is_en_passant_attack(&self) -> bool { self.get_en_passant_attack() != 0 }
+    pub const fn is_en_passant_attack(&self) -> bool { self.get_en_passant_attack() != 0 }
     #[inline(always)]
-    pub fn is_castle_move(&self) -> bool { self.get_castle_move() != 0 }
+    pub const fn is_castle_move(&self) -> bool { self.get_castle_move() != 0 }
     #[inline(always)]
-    pub fn is_halfmove_reset(&self) -> bool { self.get_halfmove_reset() != 0 }
+    pub const fn is_halfmove_reset(&self) -> bool { self.get_halfmove_reset() != 0 }
     #[inline(always)]
-    pub fn is_attack(&self) -> bool { self.get_piece_attacked() != NO_PIECE }
+    pub const fn is_attack(&self) -> bool { self.get_piece_attacked() != NO_PIECE }
     #[inline(always)]
-    pub fn is_promotion(&self) -> bool { self.get_promotion_piece() != NO_PIECE }
+    pub const fn is_promotion(&self) -> bool { self.get_promotion_piece() != NO_PIECE }
 
     pub fn to_uci_string(&self) -> String {
         format!("{}{}{}", square_to_string(self.get_source_square()), square_to_string(self.get_target_square()), piece_to_string(self.get_promotion_piece()))
@@ -144,7 +146,7 @@ pub struct MoveStructs {
 
 impl From<Move> for MoveStructs {
     fn from(mv: Move) -> Self {
-        MoveStructs {
+        Self {
             from_square: Square::by_index(mv.get_source_square() as usize).unwrap(),
             to_square: Square::by_index(mv.get_target_square() as usize).unwrap(),
             from_piece: Piece::by_index(mv.get_piece_moved() as usize).unwrap(),
@@ -202,25 +204,25 @@ impl PlayerState {
     fn pawns_ref(&mut self) -> &mut OccupancyBits { &mut self.occupancy[PAWN as usize] }
 
     #[inline(always)]
-    pub fn occupancy(&self, piece: PieceBits) -> OccupancyBits { self.occupancy[piece as usize] }
+    pub const fn occupancy(&self, piece: PieceBits) -> OccupancyBits { self.occupancy[piece as usize] }
     #[inline(always)]
-    pub fn kings(&self) -> OccupancyBits { self.occupancy[KING as usize] }
+    pub const fn kings(&self) -> OccupancyBits { self.occupancy[KING as usize] }
     #[inline(always)]
-    pub fn queens(&self) -> OccupancyBits { self.occupancy[QUEEN as usize] }
+    pub const fn queens(&self) -> OccupancyBits { self.occupancy[QUEEN as usize] }
     #[inline(always)]
-    pub fn rooks(&self) -> OccupancyBits { self.occupancy[ROOK as usize] }
+    pub const fn rooks(&self) -> OccupancyBits { self.occupancy[ROOK as usize] }
     #[inline(always)]
-    pub fn bishops(&self) -> OccupancyBits { self.occupancy[BISHOP as usize] }
+    pub const fn bishops(&self) -> OccupancyBits { self.occupancy[BISHOP as usize] }
     #[inline(always)]
-    pub fn knights(&self) -> OccupancyBits { self.occupancy[KNIGHT as usize] }
+    pub const fn knights(&self) -> OccupancyBits { self.occupancy[KNIGHT as usize] }
     #[inline(always)]
-    pub fn pawns(&self) -> OccupancyBits { self.occupancy[PAWN as usize] }
+    pub const fn pawns(&self) -> OccupancyBits { self.occupancy[PAWN as usize] }
 
-    fn get_piece_const_by_square_shift(&self, square_shift: SquareShiftBits) -> PieceBits {
+    const fn get_piece_const_by_square_shift(&self, square_shift: SquareShiftBits) -> PieceBits {
         self.get_piece_const_by_square_mask(1_u64 << square_shift)
     }
 
-    fn get_piece_const_by_square_mask(&self, square_mask: SquareMaskBits) -> PieceBits {
+    const fn get_piece_const_by_square_mask(&self, square_mask: SquareMaskBits) -> PieceBits {
         if (self.pawns() & square_mask) != 0 {
             PAWN
         } else if (self.knights() & square_mask) != 0 {
@@ -238,11 +240,11 @@ impl PlayerState {
         }
     }
 
-    fn find_piece_struct_by_square_shift(&self, square: SquareShiftBits) -> Option<Piece> {
+    const fn find_piece_struct_by_square_shift(&self, square: SquareShiftBits) -> Option<Piece> {
         self.find_piece_struct_by_square_mask(1 << square)
     }
 
-    fn find_piece_struct_by_square_mask(&self, square: SquareMaskBits) -> Option<Piece> {
+    const fn find_piece_struct_by_square_mask(&self, square: SquareMaskBits) -> Option<Piece> {
         Piece::by_index(self.get_piece_const_by_square_mask(square) as usize)
     }
 }
@@ -370,7 +372,7 @@ impl Bitboard {
                 pawn_attacks.get_attacks(source_square_shift)
                     & (passive_occupancy | ((1 << self.en_passant_square_shift) & !(RANK_1_OCCUPANCY | RANK_8_OCCUPANCY)))
                     & !active_occupancy;
-            self.generate_pawn_attacks(result, attack_occupancy, source_square_shift)
+            self.generate_pawn_attacks(result, attack_occupancy, source_square_shift);
         }
     }
 
@@ -427,23 +429,17 @@ impl Bitboard {
 
             let is_white_turn = self.is_white_turn();
 
-            let single_move_target_mask;
-            let promote_rank;
-
-            if is_white_turn {
-                single_move_target_mask = source_square_mask >> 8;
-                promote_rank = RANK_8_OCCUPANCY;
-            } else {
-                single_move_target_mask = source_square_mask << 8;
-                promote_rank = RANK_1_OCCUPANCY;
-            }
+            let (single_move_target_mask, promote_rank) =
+                if is_white_turn {
+                    (source_square_mask >> 8, RANK_8_OCCUPANCY)
+                } else {
+                    (source_square_mask << 8, RANK_1_OCCUPANCY)
+                };
 
             let single_move_target_shift = single_move_target_mask.trailing_zeros();
 
             if (single_move_target_mask & full_occupancy) == 0 {
-                if (single_move_target_mask & promote_rank) != 0 {
-                    self.generate_pawn_promotions(result, source_square_shift, single_move_target_shift);
-                } else {
+                if (single_move_target_mask & promote_rank) == 0 {
                     self.make_move(
                         result,
                         non_quiescent_only,
@@ -456,16 +452,12 @@ impl Bitboard {
                         NO_SQUARE,
                     );
 
-                    let double_move_target_mask;
-                    let double_move_source_rank;
-
-                    if is_white_turn {
-                        double_move_target_mask = single_move_target_mask >> 8;
-                        double_move_source_rank = RANK_2_OCCUPANCY;
-                    } else {
-                        double_move_target_mask = single_move_target_mask << 8;
-                        double_move_source_rank = RANK_7_OCCUPANCY;
-                    }
+                    let (double_move_target_mask, double_move_source_rank) =
+                        if is_white_turn {
+                            (single_move_target_mask >> 8, RANK_2_OCCUPANCY)
+                        } else {
+                            (single_move_target_mask << 8, RANK_7_OCCUPANCY)
+                        };
 
                     if (source_square_mask & double_move_source_rank) != 0 && (double_move_target_mask & full_occupancy) == 0 {
                         self.make_move(
@@ -480,6 +472,8 @@ impl Bitboard {
                             single_move_target_shift,
                         );
                     }
+                } else {
+                    self.generate_pawn_promotions(result, source_square_shift, single_move_target_shift);
                 }
             }
         }
@@ -489,25 +483,25 @@ impl Bitboard {
         if self.is_white_turn() {
             if self.white.queen_side_castle
                 && (full_occupancy & WHITE_QUEEN_SIDE_CASTLE_EMPTY_OCCUPANCY) == 0
-                && !self._is_occupancy_in_check(WHITE, &self.black, full_occupancy, WHITE_QUEEN_SIDE_CASTLE_CHECK_OCCUPANCY) {
+                && !Self::_is_occupancy_in_check(WHITE, &self.black, full_occupancy, WHITE_QUEEN_SIDE_CASTLE_CHECK_OCCUPANCY) {
                 self.make_castle_move(result, E1, C1);
             }
 
             if self.white.king_side_castle
                 && (full_occupancy & WHITE_KING_SIDE_CASTLE_EMPTY_OCCUPANCY) == 0
-                && !self._is_occupancy_in_check(WHITE, &self.black, full_occupancy, WHITE_KING_SIDE_CASTLE_CHECK_OCCUPANCY) {
+                && !Self::_is_occupancy_in_check(WHITE, &self.black, full_occupancy, WHITE_KING_SIDE_CASTLE_CHECK_OCCUPANCY) {
                 self.make_castle_move(result, E1, G1);
             }
         } else {
             if self.black.queen_side_castle
                 && ((full_occupancy & BLACK_QUEEN_SIDE_CASTLE_EMPTY_OCCUPANCY) == 0)
-                && !self._is_occupancy_in_check(BLACK, &self.white, full_occupancy, BLACK_QUEEN_SIDE_CASTLE_CHECK_OCCUPANCY) {
+                && !Self::_is_occupancy_in_check(BLACK, &self.white, full_occupancy, BLACK_QUEEN_SIDE_CASTLE_CHECK_OCCUPANCY) {
                 self.make_castle_move(result, E8, C8);
             }
 
             if self.black.king_side_castle
                 && (full_occupancy & BLACK_KING_SIDE_CASTLE_EMPTY_OCCUPANCY) == 0
-                && !self._is_occupancy_in_check(BLACK, &self.white, full_occupancy, BLACK_KING_SIDE_CASTLE_CHECK_OCCUPANCY) {
+                && !Self::_is_occupancy_in_check(BLACK, &self.white, full_occupancy, BLACK_KING_SIDE_CASTLE_CHECK_OCCUPANCY) {
                 self.make_castle_move(result, E8, G8);
             }
         }
@@ -639,7 +633,7 @@ impl Bitboard {
     const PIECE_VALUES: [i32; 7] = [0, 100, 320, 330, 500, 900, 901];
 
     /// Returns a value in `0..=230300`
-    fn mvv_lva(piece_active: PieceBits, piece_attacked: PieceBits) -> i32 {
+    const fn mvv_lva(piece_active: PieceBits, piece_attacked: PieceBits) -> i32 {
         if piece_attacked == NO_PIECE || piece_attacked == KING {
             return 0;
         }
@@ -821,7 +815,7 @@ impl Bitboard {
             king_target_mask,
             rook_source_mask,
             king_source_mask,
-        )
+        );
     }
 }
 
@@ -835,7 +829,7 @@ impl Bitboard {
         self._is_in_check_by_bits(self.turn)
     }
 
-    pub fn is_in_check(&self, color: Color) -> bool {
+    pub fn is_in_check(&self, color: &Color) -> bool {
         self._is_in_check_by_bits(color.index)
     }
 
@@ -849,15 +843,15 @@ impl Bitboard {
         let full_occupancy = active.full_occupancy() | passive.full_occupancy();
 
         // Assume only one king
-        self._is_square_in_check(color_bits, passive, active.kings().trailing_zeros(), full_occupancy)
+        Self::_is_square_in_check(color_bits, passive, active.kings().trailing_zeros(), full_occupancy)
     }
 
-    fn _is_occupancy_in_check(&self, color_bits: ColorBits, passive: &PlayerState, full_occupancy: OccupancyBits, mut king_occupancy: OccupancyBits) -> bool {
+    fn _is_occupancy_in_check(color_bits: ColorBits, passive: &PlayerState, full_occupancy: OccupancyBits, mut king_occupancy: OccupancyBits) -> bool {
         while king_occupancy != 0 {
             let (king_square_mask, king_square_shift) = mask_and_shift_from_lowest_one_bit(king_occupancy);
             king_occupancy &= !king_square_mask;
 
-            if self._is_square_in_check(color_bits, passive, king_square_shift, full_occupancy) {
+            if Self::_is_square_in_check(color_bits, passive, king_square_shift, full_occupancy) {
                 return true;
             }
         }
@@ -865,7 +859,7 @@ impl Bitboard {
         false
     }
 
-    fn _is_square_in_check(&self, color_bits: ColorBits, passive: &PlayerState, king_square_shift: u32, full_occupancy: OccupancyBits) -> bool {
+    fn _is_square_in_check(color_bits: ColorBits, passive: &PlayerState, king_square_shift: u32, full_occupancy: OccupancyBits) -> bool {
         let rook_attacks = ROOK_MAGICS.get_attacks(king_square_shift, full_occupancy);
 
         if (rook_attacks & (passive.rooks() | passive.queens())) != 0 {
@@ -1061,17 +1055,17 @@ impl Bitboard {
 
 // Helpers
 impl Bitboard {
-    pub fn ply_clock(&self) -> u16 {
+    pub const fn ply_clock(&self) -> u16 {
         (2 * (self.fullmove_clock - 1) + self.turn) as u16
     }
 
     #[inline(always)]
-    fn is_white_turn(&self) -> bool {
+    const fn is_white_turn(&self) -> bool {
         self.turn == WHITE
     }
 
     #[inline(always)]
-    fn get_active_and_passive(&self) -> (&PlayerState, &PlayerState) {
+    const fn get_active_and_passive(&self) -> (&PlayerState, &PlayerState) {
         if self.is_white_turn() {
             (&self.white, &self.black)
         } else {
@@ -1241,10 +1235,8 @@ impl Bitboard {
                             _ => { return false; }
                         }
 
-                        if let Some(takes) = takes {
-                            if !mv.is_attack() {
-                                return false;
-                            }
+                        if takes.is_some() && !mv.is_attack() {
+                            return false;
                         }
 
                         if let Some(from_file) = from_file {
@@ -1295,7 +1287,7 @@ impl Bitboard {
 
                 let moves = moves
                     .into_iter()
-                    .filter(|mv| mv.is_castle_move())
+                    .filter(Move::is_castle_move)
                     .filter(|mv| {
                         let file = if long_castle { FILE_C_OCCUPANCY } else { FILE_G_OCCUPANCY };
 
@@ -1317,10 +1309,8 @@ impl Bitboard {
                             return false;
                         }
 
-                        if let Some(takes) = takes {
-                            if !mv.is_attack() {
-                                return false;
-                            }
+                        if takes.is_some() && !mv.is_attack() {
+                            return false;
                         }
 
                         if let Some(promotion) = promotion {
@@ -1369,14 +1359,15 @@ impl Bitboard {
             Err(PgnParseError::Error)
         };
 
-        if let Ok(result) = result {
-            let moves = result.into_iter().filter(|mv| self.is_move_legal(*mv)).collect::<Vec<_>>();
-            if moves.len() != 1 {
-                return Err(PgnParseError::Error);
+        match result {
+            Ok(result) => {
+                let moves = result.into_iter().filter(|mv| self.is_move_legal(*mv)).collect::<Vec<_>>();
+                if moves.len() != 1 {
+                    return Err(PgnParseError::Error);
+                }
+                Ok(moves[0])
             }
-            Ok(moves[0])
-        } else {
-            Err(result.unwrap_err())
+            Err(err) => Err(err)
         }
     }
 
@@ -1425,7 +1416,7 @@ impl Bitboard {
         } else if to_piece.is_some() {
             from_square.file.fen.to_string()
         } else {
-            "".to_string()
+            String::new()
         };
         let is_pawn_move = from_piece == Piece::PAWN;
 
@@ -1434,12 +1425,12 @@ impl Bitboard {
             (true, true, false) => { format!("{}{}", from_square.file.fen, from_square.rank.fen) }
             (true, false, false) => { from_square.rank.fen.to_string() }
             (false, true, false) => { from_square.file.fen.to_string() }
-            (_, _, _) => { "".to_string() }
+            (_, _, _) => { String::new() }
         };
         let capture = if to_piece.is_some() { "x" } else { "" };
         let target_square = to_square.fen();
-        let promotion_piece = promote_to.map(|p| p.as_color(Color::WHITE));
-        let promotion_piece = promotion_piece.map(|p| format!("={}", p.fen)).unwrap_or_else(|| "".to_string());
+        let promotion_piece = promote_to.map(|p| p.as_color(&Color::WHITE));
+        let promotion_piece = promotion_piece.map_or_else(String::new, |p| format!("={}", p.fen));
         let check_str = if is_mate { "#" } else if is_check { "+" } else { "" };
 
         if matches!(from_piece, Piece::KING) {
@@ -1623,10 +1614,10 @@ impl From<&Bitboard> for Fen {
 
         result.push(' ');
 
-        if bitboard.en_passant_square_shift != NO_SQUARE {
-            result.push_str(&square_to_string(bitboard.en_passant_square_shift));
-        } else {
+        if bitboard.en_passant_square_shift == NO_SQUARE {
             result.push('-');
+        } else {
+            result.push_str(&square_to_string(bitboard.en_passant_square_shift));
         }
 
         result.push(' ');
@@ -1640,17 +1631,21 @@ impl From<&Bitboard> for Fen {
 
 // Instantiation
 impl Bitboard {
-    pub fn from_fen_string(fen: &str) -> Result<Bitboard, FenParseError> {
-        Fen::from_str(fen).map(|fen| fen.into())
+    pub fn from_fen_string(fen: &str) -> Result<Self, FenParseError> {
+        Fen::from_str(fen).map(Into::into)
     }
 
-    pub fn from_fen_string_unchecked(fen: &str) -> Bitboard {
+    pub fn from_fen_string_unchecked(fen: &str) -> Self {
         Self::from_fen_string(fen).unwrap()
     }
 }
 
 impl Display for Bitboard {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        fn format_information<T: Display>(key: &str, value: T) -> String {
+            format!("║ {: <30}║\n", format!("{: >14}: {}", key, value))
+        }
+
         let mut board = String::new();
 
         for rank in 0..8 {
@@ -1661,9 +1656,7 @@ impl Display for Bitboard {
                 let black_piece = self.black.find_piece_struct_by_square_mask(square_mask);
 
                 let char = if let Some(white_piece) = white_piece {
-                    if black_piece.is_some() {
-                        panic!("two pieces on the same square")
-                    }
+                    assert!(black_piece.is_none(), "two pieces on the same square");
                     white_piece.as_white().fen
                 } else if let Some(black_piece) = black_piece {
                     black_piece.as_black().fen
@@ -1684,11 +1677,6 @@ impl Display for Bitboard {
         }
 
         let mut other = String::new();
-
-
-        fn format_information<T: Display>(key: &str, value: T) -> String {
-            format!("║ {: <30}║\n", format!("{: >14}: {}", key, value))
-        }
 
         other.push_str(&format_information("fullmove clock", self.fullmove_clock));
         other.push_str(&format_information("halfmove clock", self.halfmove_clock));

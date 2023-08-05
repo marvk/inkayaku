@@ -11,7 +11,7 @@ impl Color {
 
     pub const VALUES: [Self; 2] = [Self::WHITE, Self::BLACK];
 
-    pub fn by_index(index: usize) -> Color {
+    pub fn by_index(index: usize) -> Self {
         match index {
             0 => Self::WHITE,
             1 => Self::BLACK,

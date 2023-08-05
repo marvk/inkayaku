@@ -5,6 +5,8 @@ pub struct File {
     pub index: u8,
 }
 
+// TODO indices??
+
 impl File {
     pub const FILE_A: Self = Self { fen: 'a', index: 0 };
     pub const FILE_B: Self = Self { fen: 'b', index: 1 };
@@ -15,9 +17,9 @@ impl File {
     pub const FILE_G: Self = Self { fen: 'g', index: 6 };
     pub const FILE_H: Self = Self { fen: 'h', index: 7 };
 
-    pub const VALUES: [Self; 8] = [Self::FILE_H, Self::FILE_G, Self::FILE_F, Self::FILE_E, Self::FILE_D, Self::FILE_C, Self::FILE_B, Self::FILE_A, ];
+    pub const VALUES: [Self; 8] = [Self::FILE_H, Self::FILE_G, Self::FILE_F, Self::FILE_E, Self::FILE_D, Self::FILE_C, Self::FILE_B, Self::FILE_A];
 
-    pub fn by_index<'a>(index: usize) -> &'a Self {
+    pub const fn by_index<'a>(index: usize) -> &'a Self {
         &Self::VALUES[index]
     }
 }

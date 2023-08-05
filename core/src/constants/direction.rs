@@ -5,12 +5,12 @@ pub struct Direction {
 }
 
 impl Direction {
-    pub const fn from(d_file: i32, d_rank: i32) -> Direction {
-        Direction { d_file, d_rank }
+    pub const fn from(d_file: i32, d_rank: i32) -> Self {
+        Self { d_file, d_rank }
     }
 
-    pub const fn from_others(first: Direction, second: Direction) -> Direction {
-        Direction { d_file: first.d_file + second.d_file, d_rank: first.d_rank + second.d_rank }
+    pub const fn from_others(first: Self, second: Self) -> Self {
+        Self { d_file: first.d_file + second.d_file, d_rank: first.d_rank + second.d_rank }
     }
 
     pub const NORTH: Self = Self::from(0, -1);
@@ -32,10 +32,10 @@ impl Direction {
     pub const WEST_NORTH_WEST: Self = Self::from_others(Self::WEST, Self::NORTH_WEST);
     pub const NORTH_NORTH_WEST: Self = Self::from_others(Self::NORTH, Self::NORTH_WEST);
 
-    pub const ORTHOGONAL_DIRECTIONS: [Self; 4] = [Self::NORTH, Self::EAST, Self::SOUTH, Self::WEST, ];
-    pub const DIAGONAL_DIRECTIONS: [Self; 4] = [Self::NORTH_EAST, Self::SOUTH_EAST, Self::SOUTH_WEST, Self::NORTH_WEST, ];
-    pub const CARDINAL_DIRECTIONS: [Self; 8] = [Self::NORTH, Self::EAST, Self::SOUTH, Self::WEST, Self::NORTH_EAST, Self::SOUTH_EAST, Self::SOUTH_WEST, Self::NORTH_WEST, ];
-    pub const KNIGHT_DIRECTIONS: [Self; 8] = [Self::NORTH_NORTH_EAST, Self::EAST_NORTH_EAST, Self::EAST_SOUTH_EAST, Self::SOUTH_SOUTH_EAST, Self::SOUTH_SOUTH_WEST, Self::WEST_SOUTH_WEST, Self::WEST_NORTH_WEST, Self::NORTH_NORTH_WEST, ];
+    pub const ORTHOGONAL_DIRECTIONS: [Self; 4] = [Self::NORTH, Self::EAST, Self::SOUTH, Self::WEST];
+    pub const DIAGONAL_DIRECTIONS: [Self; 4] = [Self::NORTH_EAST, Self::SOUTH_EAST, Self::SOUTH_WEST, Self::NORTH_WEST];
+    pub const CARDINAL_DIRECTIONS: [Self; 8] = [Self::NORTH, Self::EAST, Self::SOUTH, Self::WEST, Self::NORTH_EAST, Self::SOUTH_EAST, Self::SOUTH_WEST, Self::NORTH_WEST];
+    pub const KNIGHT_DIRECTIONS: [Self; 8] = [Self::NORTH_NORTH_EAST, Self::EAST_NORTH_EAST, Self::EAST_SOUTH_EAST, Self::SOUTH_SOUTH_EAST, Self::SOUTH_SOUTH_WEST, Self::WEST_SOUTH_WEST, Self::WEST_NORTH_WEST, Self::NORTH_NORTH_WEST];
 }
 
 #[cfg(test)]

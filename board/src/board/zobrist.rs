@@ -2,6 +2,7 @@ use crate::board::constants::{ColorBits, PieceBits, QUEEN, SquareShiftBits, Zobr
 
 pub enum Zobrist {}
 
+#[allow(clippy::unreadable_literal)]
 impl Zobrist {
     const PIECE_SQUARE_HASHES: [[ZobristHash; 64]; 14] = [
         [0; 64],

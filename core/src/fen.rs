@@ -51,16 +51,10 @@ impl Fen {
         &self.fen[self.en_passant_target_square.start..self.en_passant_target_square.end]
     }
     pub fn get_halfmove_clock(&self) -> &str {
-        match &self.halfmove_clock {
-            Some(range) => &self.fen[range.start..range.end],
-            None => "0",
-        }
+        self.halfmove_clock.as_ref().map_or("0", |range| &self.fen[range.start..range.end])
     }
     pub fn get_fullmove_clock(&self) -> &str {
-        match &self.fullmove_clock {
-            Some(range) => &self.fen[range.start..range.end],
-            None => "1",
-        }
+        self.fullmove_clock.as_ref().map_or("1", |range| &self.fen[range.start..range.end])
     }
 
     fn parse(fen: &str) -> Result<Captures, FenParseError> {
@@ -107,7 +101,7 @@ impl FromStr for Fen {
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         if s == "startpos" {
-            return Ok(Fen::default());
+            return Ok(Self::default());
         }
 
         let fen = s.to_string();
