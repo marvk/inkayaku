@@ -1,13 +1,13 @@
 use std::cell::RefCell;
-use std::io::{Error, stdin};
+use std::io::stdin;
 use std::sync::Arc;
 
 use marvk_chess_engine_lib::inkayaku::Inkayaku;
-use marvk_chess_uci::uci::{Engine, UciTx};
-use marvk_chess_uci::uci::console::{ConsoleUciRx, ConsoleUciTx};
-use marvk_chess_uci::uci::console::ConsoleUciRxError::CommandParseError;
-use marvk_chess_uci::uci::parser::ParserError::UnknownCommand;
-use marvk_chess_uci::uci::UciCommand::SetDebug;
+use marvk_chess_uci::{Engine, UciTx};
+use marvk_chess_uci::console::{ConsoleUciRx, ConsoleUciTx};
+use marvk_chess_uci::console::ConsoleUciRxError::CommandParseError;
+use marvk_chess_uci::parser::ParserError::UnknownCommand;
+use marvk_chess_uci::UciCommand::SetDebug;
 
 #[cfg(feature = "debug")]
 const DEBUG_DEFAULT: bool = true;
@@ -19,7 +19,7 @@ fn main() {
     if DEBUG_DEFAULT { tx.debug("DEBUG ENABLED") }
     print_ln("Inkayaku by Marvin Kuhnke (see https://github.com/marvk/rust-chess)");
     let engine = RefCell::new(Inkayaku::new(tx.clone(), DEBUG_DEFAULT));
-    let on_command = move |command_result| {
+    let on_command = |command_result| {
         match command_result {
             Ok(command) => {
                 if let SetDebug { debug } = command {
@@ -36,9 +36,10 @@ fn main() {
     rx.start();
 }
 
-fn read_line() -> Result<String, Error> {
+fn read_line() -> Result<String, std::io::Error> {
     let mut result = String::new();
-    stdin().read_line(&mut result).map(|_| result)
+    stdin().read_line(&mut result)?;
+    Ok(result)
 }
 
 fn print_ln(line: &str) {

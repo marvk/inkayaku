@@ -1,19 +1,17 @@
-use marvk_chess_core::constants::direction::Direction;
-use marvk_chess_core::constants::square::Square;
+use marvk_chess_core::constants::Direction;
+use marvk_chess_core::constants::Square;
 use crate::board::constants::SquareShiftBits;
 
 pub type Nonmagics = [u64; 64];
 
 pub trait UnsafeNonmagicsExt {
-    fn get_attacks(&self, square_shift: SquareShiftBits) -> u64;
+    unsafe fn get_attacks(&self, square_shift: SquareShiftBits) -> u64;
 }
 
 impl UnsafeNonmagicsExt for Nonmagics {
     #[inline(always)]
-    fn get_attacks(&self, square_shift: SquareShiftBits) -> u64 {
-        unsafe {
-            *self.get_unchecked(square_shift as usize)
-        }
+    unsafe fn get_attacks(&self, square_shift: SquareShiftBits) -> u64 {
+        *self.get_unchecked(square_shift as usize)
     }
 }
 

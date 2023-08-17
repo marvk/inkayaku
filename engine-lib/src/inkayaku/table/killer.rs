@@ -1,5 +1,5 @@
 use std::cmp::min;
-use marvk_chess_board::board::Move;
+use marvk_chess_board::Move;
 
 #[derive(Default)]
 pub struct KillerTable {

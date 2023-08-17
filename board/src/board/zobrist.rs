@@ -1,6 +1,6 @@
 use crate::board::constants::{ColorBits, PieceBits, QUEEN, SquareShiftBits, ZobristHash};
 
-pub enum Zobrist {}
+pub(crate) struct Zobrist;
 
 #[allow(clippy::unreadable_literal)]
 impl Zobrist {

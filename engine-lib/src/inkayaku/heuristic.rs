@@ -1,7 +1,7 @@
-use marvk_chess_board::board::{Bitboard, PlayerState};
-use marvk_chess_board::board::constants::{BLACK, WHITE, ZobristHash};
-use marvk_chess_uci::uci::Score;
-use marvk_chess_uci::uci::Score::{Centipawn, Mate};
+use marvk_chess_board::{Bitboard, PlayerState};
+use marvk_chess_board::constants::{BLACK, WHITE, ZobristHash};
+use marvk_chess_uci::Score;
+use marvk_chess_uci::Score::{Centipawn, Mate};
 
 pub mod simple;
 pub mod improved;

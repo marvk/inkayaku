@@ -3,7 +3,7 @@ use std::sync::mpsc::{channel, Receiver, Sender};
 use std::thread;
 use std::thread::JoinHandle;
 
-use marvk_chess_uci::uci::{Engine, ProtectionMessage, UciCommand, UciTx};
+use marvk_chess_uci::{Engine, ProtectionMessage, UciCommand, UciTx};
 use SearchMessage::{UciGo, UciPositionFrom, UciUciNewGame};
 use UciCommand::{IsReady, PonderHit, PositionFrom, Quit, Register, RegisterLater, SetDebug, SetOption, SetOptionValue, Stop, Uci, UciNewGame};
 use UciCommand::Go as GoCommand;
@@ -100,8 +100,8 @@ mod test {
     use std::sync::mpsc::channel;
 
     use marvk_chess_core::fen::Fen;
-    use marvk_chess_uci::uci::{Engine, Go, Score, UciCommand, UciMove, UciTxCommand};
-    use marvk_chess_uci::uci::command::CommandUciTx;
+    use marvk_chess_uci::{Engine, Go, Score, UciCommand, UciMove, UciTxCommand};
+    use marvk_chess_uci::command::CommandUciTx;
 
     use crate::inkayaku::Inkayaku;
 

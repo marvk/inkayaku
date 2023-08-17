@@ -10,16 +10,16 @@ use futures::executor::block_on;
 use futures::pin_mut;
 use futures_util::StreamExt;
 
-use marvk_chess_board::board::Bitboard;
-use marvk_chess_core::constants::color::Color;
+use marvk_chess_board::Bitboard;
+use marvk_chess_core::constants::Color;
 use marvk_chess_core::fen::Fen;
 use marvk_chess_engine_lib::inkayaku::Inkayaku;
 use marvk_chess_lichess_api::api::bot_event_response::ChallengeEventDeclineReason;
 use marvk_chess_lichess_api::api::bot_game_state_response::{BotGameState, Clock, GameStateHolder};
 use marvk_chess_lichess_api::api::BotApi;
 use marvk_chess_lichess_api::api::response::{GameStatusKey, SpeedKey, VariantFull, VariantKey};
-use marvk_chess_uci::uci::{Engine, Go, UciCommand, UciMove, UciTxCommand};
-use marvk_chess_uci::uci::command::CommandUciTx;
+use marvk_chess_uci::{Engine, Go, UciCommand, UciMove, UciTxCommand};
+use marvk_chess_uci::command::CommandUciTx;
 
 
 pub struct GameThread {

@@ -1,3 +1,5 @@
 extern crate core;
 
-pub mod uci;
+mod uci;
+
+pub use uci::*;

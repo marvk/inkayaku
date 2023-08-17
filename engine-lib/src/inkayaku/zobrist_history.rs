@@ -1,5 +1,5 @@
 use std::cmp::max;
-use marvk_chess_board::board::constants::ZobristHash;
+use marvk_chess_board::constants::ZobristHash;
 
 pub struct ZobristHistory {
     history: [ZobristHash; 5000],

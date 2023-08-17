@@ -233,8 +233,8 @@ mod tests {
     use std::str::FromStr;
     use std::time::Duration;
 
-    use marvk_chess_core::constants::piece::Piece;
-    use marvk_chess_core::constants::square::Square;
+    use marvk_chess_core::constants::Piece;
+    use marvk_chess_core::constants::Square;
     use marvk_chess_core::fen::Fen;
     use marvk_chess_core::fen::FenParseError::ConcurrentNumbers;
 

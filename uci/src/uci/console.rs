@@ -194,8 +194,8 @@ impl<FRead: Fn() -> Result<String, IoError>, FOnCommand: Fn(Result<UciCommand, C
 //     use std::sync::{Arc, Mutex};
 //     use std::time::Duration;
 //
-//     use marvk_chess_core::constants::piece::Piece;
-//     use marvk_chess_core::constants::square::Square;
+//     use marvk_chess_core::constants::Piece;
+//     use marvk_chess_core::constants::Square;
 //     use marvk_chess_core::fen::Fen;
 //
 //     use crate::uci::{Bound, Engine, Go, Info, ProtectionMessage, Score, UciCommand, UciMove, UciTx};

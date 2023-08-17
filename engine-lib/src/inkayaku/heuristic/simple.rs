@@ -1,5 +1,5 @@
-use marvk_chess_board::board::{Bitboard, PlayerState};
-use marvk_chess_board::board::constants::{BISHOP, GameStageBits, KING, KNIGHT, LATE, MID, OccupancyBits, PAWN, QUEEN, ROOK, ZobristHash};
+use marvk_chess_board::{Bitboard, PlayerState};
+use marvk_chess_board::constants::{BISHOP, GameStageBits, KING, KNIGHT, LATE, MID, OccupancyBits, PAWN, QUEEN, ROOK, ZobristHash};
 use marvk_chess_board::mask_and_shift_from_lowest_one_bit;
 
 use crate::inkayaku::heuristic::{Heuristic, mirror_and_flip_sign};
@@ -175,7 +175,7 @@ impl Heuristic for SimpleHeuristic {
 
 #[cfg(test)]
 mod test {
-    use marvk_chess_board::board::Bitboard;
+    use marvk_chess_board::Bitboard;
 
     use crate::inkayaku::heuristic::Heuristic;
     use crate::inkayaku::heuristic::simple::SimpleHeuristic;

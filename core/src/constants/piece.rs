@@ -19,43 +19,23 @@ impl Piece {
 
     pub const VALUES: [Self; 6] = [Self::PAWN, Self::KNIGHT, Self::BISHOP, Self::ROOK, Self::QUEEN, Self::KING];
 
-    pub fn as_color(&self, color: &Color) -> ColoredPiece {
+    pub fn to_color(&self, color: &Color) -> ColoredPiece {
         match *color {
-            Color::WHITE => self.as_white(),
-            Color::BLACK => self.as_black(),
+            Color::WHITE => self.to_white(),
+            Color::BLACK => self.to_black(),
             _ => panic!(),
         }
     }
 
-    pub fn as_black(&self) -> ColoredPiece {
-        match *self {
-            Self::PAWN => ColoredPiece::BLACK_PAWN,
-            Self::KNIGHT => ColoredPiece::BLACK_KNIGHT,
-            Self::BISHOP => ColoredPiece::BLACK_BISHOP,
-            Self::ROOK => ColoredPiece::BLACK_ROOK,
-            Self::QUEEN => ColoredPiece::BLACK_QUEEN,
-            Self::KING => ColoredPiece::BLACK_KING,
-            _ => panic!(),
-        }
+    pub fn to_black(&self) -> ColoredPiece {
+        ColoredPiece::from_indices_unchecked(Color::BLACK.index as usize, self.index as usize)
     }
 
-    pub fn as_white(&self) -> ColoredPiece {
-        match *self {
-            Self::PAWN => ColoredPiece::WHITE_PAWN,
-            Self::KNIGHT => ColoredPiece::WHITE_KNIGHT,
-            Self::BISHOP => ColoredPiece::WHITE_BISHOP,
-            Self::ROOK => ColoredPiece::WHITE_ROOK,
-            Self::QUEEN => ColoredPiece::WHITE_QUEEN,
-            Self::KING => ColoredPiece::WHITE_KING,
-            _ => panic!(),
-        }
+    pub fn to_white(&self) -> ColoredPiece {
+        ColoredPiece::from_indices_unchecked(Color::WHITE.index as usize, self.index as usize)
     }
 
-    pub fn uci_name(&self) -> char {
-        self.as_black().fen
-    }
-
-    pub const fn by_char(c: char) -> Option<Self> {
+    pub const fn from_char(c: char) -> Option<Self> {
         match c {
             'K' | 'k' => Some(Self::KING),
             'Q' | 'q' => Some(Self::QUEEN),
@@ -67,7 +47,11 @@ impl Piece {
         }
     }
 
-    pub const fn by_index(index: usize) -> Option<Self> {
+    pub fn from_char_unchecked(c: char) -> Self {
+        Self::from_char(c).unwrap()
+    }
+
+    pub const fn from_index(index: usize) -> Option<Self> {
         match index {
             1 => Some(Self::PAWN),
             2 => Some(Self::KNIGHT),
@@ -77,5 +61,9 @@ impl Piece {
             6 => Some(Self::KING),
             _ => None
         }
+    }
+
+    pub const fn from_index_unchecked(index: usize) -> Self {
+        Self::VALUES[index - 1]
     }
 }

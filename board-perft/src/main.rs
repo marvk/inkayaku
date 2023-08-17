@@ -44,7 +44,7 @@ pub mod perft {
     use std::time::{Duration, SystemTime};
     use std::usize;
 
-    use marvk_chess_board::board::{Bitboard, Move};
+    use marvk_chess_board::{Bitboard, Move};
 
     use crate::{expect, PerftResult};
 

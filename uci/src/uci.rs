@@ -2,8 +2,8 @@ use std::fmt::{Display, Formatter};
 use std::str::FromStr;
 use std::time::Duration;
 
-use marvk_chess_core::constants::piece::Piece;
-use marvk_chess_core::constants::square::Square;
+use marvk_chess_core::constants::Piece;
+use marvk_chess_core::constants::Square;
 use marvk_chess_core::fen::Fen;
 
 use crate::uci::ParseUciMoveError::InvalidFormat;
@@ -51,11 +51,11 @@ impl FromStr for UciMove {
             chars.next().ok_or_else(produce_error)
         };
 
-        let source = Square::by_chars(next_char()?, next_char()?).ok_or_else(produce_error)?;
-        let target = Square::by_chars(next_char()?, next_char()?).ok_or_else(produce_error)?;
+        let source = Square::from_chars(next_char()?, next_char()?).ok_or_else(produce_error)?;
+        let target = Square::from_chars(next_char()?, next_char()?).ok_or_else(produce_error)?;
 
         let promote_to = match next_char() {
-            Ok(c) => Some(Piece::by_char(c).ok_or_else(produce_error)?),
+            Ok(c) => Some(Piece::from_char(c).ok_or_else(produce_error)?),
             Err(_) => None,
         };
 
@@ -72,9 +72,9 @@ impl Display for UciMove {
         write!(
             f,
             "{}{}{}",
-            self.source.fen(),
-            self.target.fen(),
-            self.promote_to.as_ref().map_or_else(String::new, |m| m.uci_name().to_string())
+            self.source.fen,
+            self.target.fen,
+            self.promote_to.as_ref().map_or_else(String::new, |m| m.fen.to_string())
         )
     }
 }
@@ -318,8 +318,8 @@ pub trait UciTx {
 
 #[cfg(test)]
 mod tests {
-    use marvk_chess_core::constants::piece::Piece;
-    use marvk_chess_core::constants::square::Square;
+    use marvk_chess_core::constants::Piece;
+    use marvk_chess_core::constants::Square;
 
     use crate::uci::{ParseUciMoveError, UciMove};
 

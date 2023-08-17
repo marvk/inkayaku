@@ -1,7 +1,7 @@
 extern crate core;
 
-use marvk_chess_board::board::{Move, MoveStructs};
-use marvk_chess_uci::uci::UciMove;
+use marvk_chess_board::{Move, MoveStructs};
+use marvk_chess_uci::UciMove;
 
 pub mod inkayaku;
 

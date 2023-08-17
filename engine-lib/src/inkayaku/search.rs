@@ -4,10 +4,10 @@ use std::sync::Arc;
 use std::sync::mpsc::Receiver;
 use std::time::{Duration, SystemTime};
 
-use marvk_chess_board::board::{Bitboard, Move};
-use marvk_chess_board::board::constants::{ColorBits, WHITE, ZobristHash};
+use marvk_chess_board::{Bitboard, Move};
+use marvk_chess_board::constants::{ColorBits, WHITE, ZobristHash};
 use marvk_chess_core::fen::Fen;
-use marvk_chess_uci::uci::{Go, Info, UciMove, UciTx};
+use marvk_chess_uci::{Go, Info, UciMove, UciTx};
 use SearchMessage::{UciDebug, UciGo, UciPonderHit, UciPositionFrom, UciQuit, UciStop, UciUciNewGame};
 
 use crate::inkayaku::heuristic::Heuristic;
@@ -687,7 +687,7 @@ enum PvContinuationError {
 
 #[cfg(test)]
 mod test {
-    use marvk_chess_board::board::constants::{BLACK, WHITE};
+    use marvk_chess_board::constants::{BLACK, WHITE};
 
     use crate::inkayaku::search::calculate_heuristic_factor;
 

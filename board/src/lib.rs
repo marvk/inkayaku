@@ -1,11 +1,13 @@
 extern crate core;
 
-use marvk_chess_core::constants::piece::Piece;
-use marvk_chess_core::constants::square::Square;
+use marvk_chess_core::constants::Piece;
+use marvk_chess_core::constants::Square;
 
 use crate::board::constants::{ColorBits, OccupancyBits, PieceBits, SquareMaskBits, SquareShiftBits};
 
-pub mod board;
+mod board;
+
+pub use board::*;
 
 pub fn occupancy_to_string(occupancy: OccupancyBits) -> String {
     let reversed = occupancy.reverse_bits();
@@ -33,11 +35,11 @@ pub fn occupancy_to_string(occupancy: OccupancyBits) -> String {
 
 
 pub fn piece_to_string(piece_bits: PieceBits) -> String {
-    Piece::by_index(piece_bits as usize).map_or_else(String::new, |p| p.fen.to_string())
+    Piece::from_index(piece_bits as usize).map_or_else(String::new, |p| p.fen.to_string())
 }
 
 pub fn square_to_string(square_shift_bits: SquareShiftBits) -> String {
-    Square::by_index(square_shift_bits as usize).map_or_else(String::new, |s| s.fen())
+    Square::from_index(square_shift_bits as usize).map_or_else(String::new, |s| s.fen.to_string())
 }
 
 #[inline(always)]

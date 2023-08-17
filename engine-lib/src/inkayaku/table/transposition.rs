@@ -1,4 +1,4 @@
-use marvk_chess_board::board::constants::ZobristHash;
+use marvk_chess_board::constants::ZobristHash;
 
 use crate::inkayaku::search::ValuedMove;
 use crate::inkayaku::table::HashTable;

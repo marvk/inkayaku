@@ -4,13 +4,13 @@ use std::collections::HashSet;
 use rand::{Rng, SeedableRng};
 use rand::rngs::StdRng;
 
-use marvk_chess_core::constants::direction::Direction;
-use marvk_chess_core::constants::piece::Piece;
-use marvk_chess_core::constants::square::Square;
+use marvk_chess_core::constants::Direction;
+use marvk_chess_core::constants::Piece;
+use marvk_chess_core::constants::Square;
 use crate::board::precalculated::magic::magic_hash;
 
 #[derive(Debug, Eq, PartialEq)]
-pub struct GeneratorConfiguration {
+pub(crate) struct GeneratorConfiguration {
     pub mask: u64,
     pub magic: u64,
     pub hash_mask: u64,
@@ -36,7 +36,7 @@ impl GeneratorConfiguration {
     }
 }
 
-pub struct ConfigurationGenerator {
+pub(crate) struct ConfigurationGenerator {
     square: Square,
     directions: [Direction; 4],
     mask: u64,
@@ -210,8 +210,8 @@ mod tests {
     use std::env;
     use std::fs::write;
 
-    use marvk_chess_core::constants::piece::Piece;
-    use marvk_chess_core::constants::square::Square;
+    use marvk_chess_core::constants::Piece;
+    use marvk_chess_core::constants::Square;
     use crate::board::precalculated::magic::generator::{GeneratorConfiguration, ConfigurationGenerator};
 
     fn generate_magic_hashes_for(piece: Piece) -> [u64; 64] {

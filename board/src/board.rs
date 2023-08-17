@@ -4,19 +4,19 @@ use std::str::FromStr;
 use lazy_static::lazy_static;
 use regex::Regex;
 
-use marvk_chess_core::constants::color::Color;
-use marvk_chess_core::constants::colored_piece::ColoredPiece;
-use marvk_chess_core::constants::file::File;
-use marvk_chess_core::constants::piece::Piece;
-use marvk_chess_core::constants::square::Square;
+use marvk_chess_core::constants::Color;
+use marvk_chess_core::constants::ColoredPiece;
+use marvk_chess_core::constants::File;
+use marvk_chess_core::constants::Piece;
+use marvk_chess_core::constants::Square;
 use marvk_chess_core::fen::{Fen, FenParseError};
 
 use crate::{mask_and_shift_from_lowest_one_bit, opposite_color, piece_to_string, square_to_string};
 #[allow(clippy::wildcard_imports)]
 use crate::board::constants::*;
 use crate::board::MoveFromUciError::{MoveDoesNotExist, MoveIsNotValid};
-use crate::board::precalculated::magic::{BISHOP_MAGICS, Magics, ROOK_MAGICS, UnsafeMagicsExt};
-use crate::board::precalculated::nonmagic::{BLACK_PAWN_NONMAGICS, KING_NONMAGICS, KNIGHT_NONMAGICS, Nonmagics, UnsafeNonmagicsExt, WHITE_PAWN_NONMAGICS};
+use crate::board::precalculated::{BISHOP_MAGICS, Magics, ROOK_MAGICS, UnsafeMagicsExt};
+use crate::board::precalculated::{BLACK_PAWN_NONMAGICS, KING_NONMAGICS, KNIGHT_NONMAGICS, Nonmagics, UnsafeNonmagicsExt, WHITE_PAWN_NONMAGICS};
 use crate::board::zobrist::Zobrist;
 
 pub mod constants;
@@ -147,11 +147,11 @@ impl From<Move> for MoveStructs {
     fn from(mv: Move) -> Self {
         #[allow(clippy::unwrap_used)]
         Self {
-            from_square: Square::by_index(mv.get_source_square() as usize).unwrap(),
-            to_square: Square::by_index(mv.get_target_square() as usize).unwrap(),
-            from_piece: Piece::by_index(mv.get_piece_moved() as usize).unwrap(),
-            to_piece: Piece::by_index(mv.get_piece_attacked() as usize),
-            promote_to: Piece::by_index(mv.get_promotion_piece() as usize),
+            from_square: Square::from_index_unchecked(mv.get_source_square() as usize),
+            to_square: Square::from_index_unchecked(mv.get_target_square() as usize),
+            from_piece: Piece::from_index_unchecked(mv.get_piece_moved() as usize),
+            to_piece: Piece::from_index(mv.get_piece_attacked() as usize),
+            promote_to: Piece::from_index(mv.get_promotion_piece() as usize),
         }
     }
 }
@@ -245,7 +245,7 @@ impl PlayerState {
     }
 
     const fn find_piece_struct_by_square_mask(&self, square: SquareMaskBits) -> Option<Piece> {
-        Piece::by_index(self.get_piece_const_by_square_mask(square) as usize)
+        Piece::from_index(self.get_piece_const_by_square_mask(square) as usize)
     }
 }
 
@@ -356,7 +356,7 @@ impl Bitboard {
             let (source_square_mask, source_square_shift) = mask_and_shift_from_lowest_one_bit(piece_occupancy);
             piece_occupancy &= !source_square_mask;
 
-            let attack_occupancy = nonmagics.get_attacks(source_square_shift) & !active_occupancy;
+            let attack_occupancy = unsafe { nonmagics.get_attacks(source_square_shift) } & !active_occupancy;
             self.generate_attacks(result, non_quiescent_only, source_square_shift, attack_occupancy, piece);
         }
     }
@@ -369,7 +369,7 @@ impl Bitboard {
             pawn_occupancy &= !source_square_mask;
 
             let attack_occupancy =
-                pawn_attacks.get_attacks(source_square_shift)
+                unsafe { pawn_attacks.get_attacks(source_square_shift) }
                     & (passive_occupancy | ((1 << self.en_passant_square_shift) & !(RANK_1_OCCUPANCY | RANK_8_OCCUPANCY)))
                     & !active_occupancy;
             self.generate_pawn_attacks(result, attack_occupancy, source_square_shift);
@@ -872,23 +872,23 @@ impl Bitboard {
             return true;
         }
 
-        let knight_attacks = KNIGHT_NONMAGICS.get_attacks(king_square_shift);
+        let knight_attacks = unsafe { KNIGHT_NONMAGICS.get_attacks(king_square_shift) };
 
         if (knight_attacks & passive.knights()) != 0 {
             return true;
         }
 
         let pawn_attacks = if color_bits == WHITE {
-            WHITE_PAWN_NONMAGICS.get_attacks(king_square_shift)
+            unsafe { WHITE_PAWN_NONMAGICS.get_attacks(king_square_shift) }
         } else {
-            BLACK_PAWN_NONMAGICS.get_attacks(king_square_shift)
+            unsafe { BLACK_PAWN_NONMAGICS.get_attacks(king_square_shift) }
         };
 
         if (pawn_attacks & passive.pawns()) != 0 {
             return true;
         }
 
-        let king_attacks = KING_NONMAGICS.get_attacks(king_square_shift);
+        let king_attacks = unsafe { KING_NONMAGICS.get_attacks(king_square_shift) };
 
         (king_attacks & passive.kings()) != 0
     }
@@ -1087,8 +1087,8 @@ impl Bitboard {
         let maybe_black = self.black.find_piece_struct_by_square_mask(square.mask);
 
         match (maybe_white, maybe_black) {
-            (Some(piece), None) => Some(piece.as_white()),
-            (None, Some(piece)) => Some(piece.as_black()),
+            (Some(piece), None) => Some(piece.to_white()),
+            (None, Some(piece)) => Some(piece.to_black()),
             (None, None) => None,
             (Some(_), Some(_)) => panic!(),
         }
@@ -1399,20 +1399,20 @@ impl Bitboard {
         let any_share_source_rank =
             legal_moves_with_same_to_square_and_same_piece.iter()
                 .any(|mv| {
-                    let other_square = Square::by_index(mv.get_source_square() as usize).unwrap();
+                    let other_square = Square::from_index(mv.get_source_square() as usize).unwrap();
                     other_square.rank == from_square.rank && other_square.file != from_square.file
                 });
 
         let any_share_source_file =
             legal_moves_with_same_to_square_and_same_piece.iter()
                 .any(|mv| {
-                    let other_square = Square::by_index(mv.get_source_square() as usize).unwrap();
+                    let other_square = Square::from_index(mv.get_source_square() as usize).unwrap();
                     other_square.file == from_square.file && other_square.rank != from_square.rank
                 });
 
 
         let piece = if !matches!(from_piece, Piece::PAWN) {
-            from_piece.as_white().fen.to_string()
+            from_piece.to_white().fen.to_string()
         } else if to_piece.is_some() {
             from_square.file.fen.to_string()
         } else {
@@ -1427,8 +1427,8 @@ impl Bitboard {
             (_, _, _) => { String::new() }
         };
         let capture = if to_piece.is_some() { "x" } else { "" };
-        let target_square = to_square.fen();
-        let promotion_piece = promote_to.map(|p| p.as_color(&Color::WHITE));
+        let target_square = to_square.fen;
+        let promotion_piece = promote_to.map(|p| p.to_color(&Color::WHITE));
         let promotion_piece = promotion_piece.map_or_else(String::new, |p| format!("={}", p.fen));
         let check_str = if is_mate { "#" } else if is_check { "+" } else { "" };
 
@@ -1577,7 +1577,7 @@ impl From<&Bitboard> for Fen {
         for rank in 0..8 {
             let mut consecutive_empty = 0;
             for file in 0..8 {
-                let square = Square::by_indices(file, rank).unwrap();
+                let square = Square::from_indices(file, rank).unwrap();
                 let maybe_piece = bitboard.get_colored_piece(square);
                 match maybe_piece {
                     Some(piece) => {
@@ -1664,9 +1664,9 @@ impl Display for Bitboard {
 
                 let char = if let Some(white_piece) = white_piece {
                     assert!(black_piece.is_none(), "two pieces on the same square");
-                    white_piece.as_white().fen
+                    white_piece.to_white().fen
                 } else if let Some(black_piece) = black_piece {
-                    black_piece.as_black().fen
+                    black_piece.to_black().fen
                 } else {
                     ' '
                 };
@@ -1707,7 +1707,7 @@ mod tests {
     use rand::prelude::{SliceRandom, StdRng};
     use rand::SeedableRng;
 
-    use marvk_chess_core::constants::piece::Piece;
+    use marvk_chess_core::constants::Piece;
     use marvk_chess_core::fen::Fen;
 
     use crate::board::Bitboard;

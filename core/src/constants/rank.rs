@@ -17,7 +17,21 @@ impl Rank {
 
     pub const RANKS: [Self; 8] = [Self::RANK_1, Self::RANK_2, Self::RANK_3, Self::RANK_4, Self::RANK_5, Self::RANK_6, Self::RANK_7, Self::RANK_8];
 
-    pub const fn by_index<'a>(index: usize) -> &'a Self {
-        &Self::RANKS[index]
+    pub const fn by_index(index: usize) -> Option<Self> {
+        match index {
+            0 => Some(Self::RANK_8),
+            1 => Some(Self::RANK_7),
+            2 => Some(Self::RANK_6),
+            3 => Some(Self::RANK_5),
+            4 => Some(Self::RANK_4),
+            5 => Some(Self::RANK_3),
+            6 => Some(Self::RANK_2),
+            7 => Some(Self::RANK_1),
+            _ => None,
+        }
+    }
+
+    pub const fn by_index_unchecked(index: usize) -> Self {
+        Self::RANKS[8 - index - 1]
     }
 }

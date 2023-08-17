@@ -107,7 +107,7 @@ impl ReferenceEngine {
 mod perft_debug {
     use std::collections::HashSet;
 
-    use marvk_chess_board::board::{Bitboard};
+    use marvk_chess_board::{Bitboard};
     use marvk_chess_core::fen::Fen;
 
     use crate::ReferenceEngine;
@@ -231,7 +231,7 @@ mod perft {
     use std::usize;
     use std::time::SystemTime;
 
-    use marvk_chess_board::board::{Bitboard, Move};
+    use marvk_chess_board::{Bitboard, Move};
 
     use crate::{expect, PerftResult};
 
