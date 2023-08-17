@@ -4,15 +4,15 @@ debug = true
 [workspace]
 
 members = [
-    "board-perft",
+    "board_perft",
     "board",
     "core",
-    "engine-app",
-    "engine-core",
-    "engine-piece-square-table-generator",
-    "lichess-api",
-    "lichess-bot",
+    "engine_app",
+    "engine_core",
+    "engine_piece_square_table_generator",
+    "lichess_api",
+    "lichess_bot",
     "pgn",
-    "pgn-test",
+    "pgn_test",
     "uci",
 ]

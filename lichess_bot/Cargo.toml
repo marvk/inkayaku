@@ -6,8 +6,8 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-inkayaku_lichess_api = { path = "../lichess-api" }
-inkayaku_engine_core = { path = "../engine-core" }
+inkayaku_lichess_api = { path = "../lichess_api" }
+inkayaku_engine_core = { path = "../engine_core" }
 inkayaku_core = { path = "../core" }
 inkayaku_board = { path = "../board" }
 inkayaku_uci = { path = "../uci" }
