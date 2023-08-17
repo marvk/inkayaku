@@ -1,7 +1,7 @@
 use std::collections::{HashMap, VecDeque};
 use std::hash::Hash;
 
-use marvk_chess_board::constants::ZobristHash;
+use inkayaku_board::constants::ZobristHash;
 
 pub mod killer;
 pub mod transposition;

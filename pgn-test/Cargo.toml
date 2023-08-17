@@ -1,13 +1,13 @@
 [package]
-name = "marvk-chess-pgn-test"
+name = "inkayaku_pgn_test"
 version = "0.1.0"
 edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-marvk-chess-core = { path = "../core" }
-marvk-chess-board = { path = "../board" }
-marvk-chess-pgn = { path = "../pgn" }
+inkayaku_core = { path = "../core" }
+inkayaku_board = { path = "../board" }
+inkayaku_pgn = { path = "../pgn" }
 zstd = "0.12.4"
 rand = "0.8.5"

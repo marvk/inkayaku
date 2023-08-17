@@ -4,8 +4,8 @@ use futures::pin_mut;
 use futures_util::StreamExt;
 use surf::{Client, Url};
 
-use marvk_chess_lichess_api::api::{BotApi, SurfWebClient};
-use marvk_chess_lichess_api::api::bot_event_response::BotEvent;
+use inkayaku_lichess_api::api::{BotApi, SurfWebClient};
+use inkayaku_lichess_api::api::bot_event_response::BotEvent;
 
 use crate::bot::GameThread;
 

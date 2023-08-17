@@ -5,11 +5,11 @@ use std::str::FromStr;
 use std::thread;
 use std::time::Instant;
 
-use marvk_chess_board::{Bitboard, PlayerState};
-use marvk_chess_board::constants::{BLACK, ColorBits, DRAW, KING, PAWN, PieceBits, WHITE};
-use marvk_chess_board::mask_and_shift_from_lowest_one_bit;
-use marvk_chess_core::constants::Color;
-use marvk_chess_pgn::reader::{PgnRaw, PgnRawParser};
+use inkayaku_board::{Bitboard, PlayerState};
+use inkayaku_board::constants::{BLACK, ColorBits, DRAW, KING, PAWN, PieceBits, WHITE};
+use inkayaku_board::mask_and_shift_from_lowest_one_bit;
+use inkayaku_core::constants::Color;
+use inkayaku_pgn::reader::{PgnRaw, PgnRawParser};
 
 use crate::PgnExclusion::{BlackEloNotAvailable, BlackEloNotParsable, BlackEloTooLow, TimeControlNotAvailable, TimeControlNotParsable, TimeNotParsable, TimeTooLow, WhiteEloNotAvailable, WhiteEloNotParsable, WhiteEloTooLow};
 
@@ -60,8 +60,8 @@ fn test() {
 
 
     for result in WHITE..=DRAW {
-        for color in marvk_chess_core::constants::Color::VALUES {
-            for piece in marvk_chess_core::constants::Piece::VALUES {
+        for color in inkayaku_core::constants::Color::VALUES {
+            for piece in inkayaku_core::constants::Piece::VALUES {
                 for taper_factor in 0..=24 {
                     let z = buckets.get(color.index, piece.index as PieceBits, taper_factor, result);
                     let result = if result == 0 { Some(Color::WHITE) } else if result == 1 { Some(Color::BLACK) } else { None };

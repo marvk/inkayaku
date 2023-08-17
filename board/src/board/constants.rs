@@ -1,6 +1,6 @@
 #![allow(dead_code, clippy::unreadable_literal)]
 
-use marvk_chess_core::constants::to_square_index_from_indices;
+use inkayaku_core::constants::to_square_index_from_indices;
 
 pub type ColorBits = u32;
 pub type SquareShiftBits = u32;

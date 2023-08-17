@@ -1,9 +1,9 @@
 [package]
-name = "marvk-chess-uci"
+name = "inkayaku_uci"
 version = "0.1.0"
 edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-marvk-chess-core = { path = "../core" }
+inkayaku_core = { path = "../core" }

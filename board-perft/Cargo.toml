@@ -1,8 +1,8 @@
 [package]
-name = "marvk-chess-board-perft"
+name = "inkayaku_board_perft"
 version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-marvk-chess-board = { path = "../board" }
-marvk-chess-core = { path = "../core" }
+inkayaku_board = { path = "../board" }
+inkayaku_core = { path = "../core" }

@@ -1,5 +1,5 @@
-use marvk_chess_board::Bitboard;
-use marvk_chess_board::constants::ZobristHash;
+use inkayaku_board::Bitboard;
+use inkayaku_board::constants::ZobristHash;
 
 use crate::engine::heuristic::{Heuristic, mirror_and_flip_sign, PieceCounts};
 use crate::engine::table::HashTable;

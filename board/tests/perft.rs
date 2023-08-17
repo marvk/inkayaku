@@ -7,7 +7,7 @@ use std::str::from_utf8;
 use std::thread::sleep;
 use std::time::Duration;
 
-use marvk_chess_core::fen::Fen;
+use inkayaku_core::fen::Fen;
 
 #[derive(PartialEq, Eq, Copy, Clone)]
 struct PerftResult {
@@ -107,8 +107,8 @@ impl ReferenceEngine {
 mod perft_debug {
     use std::collections::HashSet;
 
-    use marvk_chess_board::{Bitboard};
-    use marvk_chess_core::fen::Fen;
+    use inkayaku_board::{Bitboard};
+    use inkayaku_core::fen::Fen;
 
     use crate::ReferenceEngine;
 
@@ -231,7 +231,7 @@ mod perft {
     use std::usize;
     use std::time::SystemTime;
 
-    use marvk_chess_board::{Bitboard, Move};
+    use inkayaku_board::{Bitboard, Move};
 
     use crate::{expect, PerftResult};
 

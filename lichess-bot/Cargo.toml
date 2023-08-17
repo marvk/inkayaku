@@ -1,16 +1,16 @@
 [package]
-name = "marvk-chess-lichess-bot"
+name = "inkayaku_lichess_bot"
 version = "0.1.0"
 edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-marvk-chess-lichess-api = { path = "../lichess-api" }
-marvk-chess-engine-lib = { path = "../engine-lib" }
-marvk-chess-core = { path = "../core" }
-marvk-chess-board = { path = "../board" }
-marvk-chess-uci = { path = "../uci" }
+inkayaku_lichess_api = { path = "../lichess-api" }
+inkayaku_engine_core = { path = "../engine-core" }
+inkayaku_core = { path = "../core" }
+inkayaku_board = { path = "../board" }
+inkayaku_uci = { path = "../uci" }
 tokio = { version = "1", features = ["full"] }
 futures = "0.3.28"
 futures-core = "0.3.28"

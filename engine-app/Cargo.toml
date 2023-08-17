@@ -1,5 +1,5 @@
 [package]
-name = "marvk-chess-engine-app"
+name = "inkayaku_engine_app"
 version = "0.1.0"
 edition = "2021"
 
@@ -10,5 +10,5 @@ debug = []
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-marvk-chess-engine-lib = { path = "../engine-lib" }
-marvk-chess-uci = { path = "../uci" }
+inkayaku_engine_core = { path = "../engine-core" }
+inkayaku_uci = { path = "../uci" }

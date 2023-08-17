@@ -1,5 +1,5 @@
 [package]
-name = "marvk-chess-engine-lib"
+name = "inkayaku_engine_core"
 version = "0.1.0"
 edition = "2021"
 
@@ -8,6 +8,6 @@ edition = "2021"
 [dependencies]
 rand = "0.8.5"
 nohash-hasher = "0.2.0"
-marvk-chess-board = { path = "../board" }
-marvk-chess-core = { path = "../core" }
-marvk-chess-uci = { path = "../uci" }
+inkayaku_board = { path = "../board" }
+inkayaku_core = { path = "../core" }
+inkayaku_uci = { path = "../uci" }

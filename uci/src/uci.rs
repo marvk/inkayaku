@@ -2,9 +2,9 @@ use std::fmt::{Display, Formatter};
 use std::str::FromStr;
 use std::time::Duration;
 
-use marvk_chess_core::constants::Piece;
-use marvk_chess_core::constants::Square;
-use marvk_chess_core::fen::Fen;
+use inkayaku_core::constants::Piece;
+use inkayaku_core::constants::Square;
+use inkayaku_core::fen::Fen;
 
 use crate::uci::ParseUciMoveError::InvalidFormat;
 
@@ -316,8 +316,8 @@ pub trait UciTx {
 
 #[cfg(test)]
 mod tests {
-    use marvk_chess_core::constants::Piece;
-    use marvk_chess_core::constants::Square;
+    use inkayaku_core::constants::Piece;
+    use inkayaku_core::constants::Square;
 
     use crate::uci::{ParseUciMoveError, UciMove};
 

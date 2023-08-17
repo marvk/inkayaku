@@ -1,6 +1,6 @@
 use std::cmp::Reverse;
 
-use marvk_chess_board::Move;
+use inkayaku_board::Move;
 
 pub trait MoveOrder {
     fn sort(&self, moves: &mut Vec<Move>, pv_move: Option<Move>, transposition_move: Option<Move>, killer_move: Option<Move>);
@@ -34,7 +34,7 @@ impl MoveOrder for MvvLvaMoveOrder {
 
 #[cfg(test)]
 mod tests {
-    use marvk_chess_board::Bitboard;
+    use inkayaku_board::Bitboard;
 
     use crate::engine::move_order::{MoveOrder, MvvLvaMoveOrder};
 

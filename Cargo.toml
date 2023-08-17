@@ -8,7 +8,7 @@ members = [
     "board",
     "core",
     "engine-app",
-    "engine-lib",
+    "engine-core",
     "engine-piece-square-table-generator",
     "lichess-api",
     "lichess-bot",

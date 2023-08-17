@@ -5,7 +5,7 @@ use std::num::ParseIntError;
 use std::str::FromStr;
 use std::time::Duration;
 
-use marvk_chess_core::fen::{Fen, FenParseError};
+use inkayaku_core::fen::{Fen, FenParseError};
 
 use crate::uci::{Go, ParseUciMoveError, UciMove};
 use crate::uci::parser::ParserError::{DuplicatedToken, InvalidFen, InvalidInt, InvalidUciMove, UnexpectedEndOfCommand, UnexpectedToken, UnknownCommand};
@@ -233,10 +233,10 @@ mod tests {
     use std::str::FromStr;
     use std::time::Duration;
 
-    use marvk_chess_core::constants::Piece;
-    use marvk_chess_core::constants::Square;
-    use marvk_chess_core::fen::Fen;
-    use marvk_chess_core::fen::FenParseError::ConcurrentNumbers;
+    use inkayaku_core::constants::Piece;
+    use inkayaku_core::constants::Square;
+    use inkayaku_core::fen::Fen;
+    use inkayaku_core::fen::FenParseError::ConcurrentNumbers;
 
     use crate::uci::{ParseUciMoveError, UciCommand, UciMove};
     use crate::uci::Go;

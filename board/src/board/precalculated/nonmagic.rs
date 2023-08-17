@@ -1,5 +1,5 @@
-use marvk_chess_core::constants::Direction;
-use marvk_chess_core::constants::Square;
+use inkayaku_core::constants::Direction;
+use inkayaku_core::constants::Square;
 use crate::board::constants::SquareShiftBits;
 
 pub type Nonmagics = [u64; 64];

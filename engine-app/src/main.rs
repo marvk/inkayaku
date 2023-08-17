@@ -2,12 +2,12 @@ use std::cell::RefCell;
 use std::io::stdin;
 use std::sync::Arc;
 
-use marvk_chess_engine_lib::engine::Engine;
-use marvk_chess_uci::{UciEngine, UciTx};
-use marvk_chess_uci::console::{ConsoleUciRx, ConsoleUciTx};
-use marvk_chess_uci::console::ConsoleUciRxError::CommandParseError;
-use marvk_chess_uci::parser::ParserError::UnknownCommand;
-use marvk_chess_uci::UciCommand::SetDebug;
+use inkayaku_engine_core::engine::Engine;
+use inkayaku_uci::{UciEngine, UciTx};
+use inkayaku_uci::console::{ConsoleUciRx, ConsoleUciTx};
+use inkayaku_uci::console::ConsoleUciRxError::CommandParseError;
+use inkayaku_uci::parser::ParserError::UnknownCommand;
+use inkayaku_uci::UciCommand::SetDebug;
 
 #[cfg(feature = "debug")]
 const DEBUG_DEFAULT: bool = true;

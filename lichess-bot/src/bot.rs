@@ -10,16 +10,16 @@ use futures::executor::block_on;
 use futures::pin_mut;
 use futures_util::StreamExt;
 
-use marvk_chess_board::Bitboard;
-use marvk_chess_core::constants::Color;
-use marvk_chess_core::fen::Fen;
-use marvk_chess_engine_lib::engine::Engine;
-use marvk_chess_lichess_api::api::bot_event_response::ChallengeEventDeclineReason;
-use marvk_chess_lichess_api::api::bot_game_state_response::{BotGameState, Clock, GameStateHolder};
-use marvk_chess_lichess_api::api::BotApi;
-use marvk_chess_lichess_api::api::response::{GameStatusKey, SpeedKey, VariantFull, VariantKey};
-use marvk_chess_uci::{UciEngine, Go, UciCommand, UciMove, UciTxCommand};
-use marvk_chess_uci::command::CommandUciTx;
+use inkayaku_board::Bitboard;
+use inkayaku_core::constants::Color;
+use inkayaku_core::fen::Fen;
+use inkayaku_engine_core::engine::Engine;
+use inkayaku_lichess_api::api::bot_event_response::ChallengeEventDeclineReason;
+use inkayaku_lichess_api::api::bot_game_state_response::{BotGameState, Clock, GameStateHolder};
+use inkayaku_lichess_api::api::BotApi;
+use inkayaku_lichess_api::api::response::{GameStatusKey, SpeedKey, VariantFull, VariantKey};
+use inkayaku_uci::{UciEngine, Go, UciCommand, UciMove, UciTxCommand};
+use inkayaku_uci::command::CommandUciTx;
 
 
 pub struct GameThread {

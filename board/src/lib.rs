@@ -1,7 +1,7 @@
 extern crate core;
 
-use marvk_chess_core::constants::Piece;
-use marvk_chess_core::constants::Square;
+use inkayaku_core::constants::Piece;
+use inkayaku_core::constants::Square;
 
 use crate::board::constants::{ColorBits, OccupancyBits, PieceBits, SquareMaskBits, SquareShiftBits};
 

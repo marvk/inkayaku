@@ -4,12 +4,12 @@ use std::str::FromStr;
 use lazy_static::lazy_static;
 use regex::Regex;
 
-use marvk_chess_core::constants::Color;
-use marvk_chess_core::constants::ColoredPiece;
-use marvk_chess_core::constants::File;
-use marvk_chess_core::constants::Piece;
-use marvk_chess_core::constants::Square;
-use marvk_chess_core::fen::{Fen, FenParseError};
+use inkayaku_core::constants::Color;
+use inkayaku_core::constants::ColoredPiece;
+use inkayaku_core::constants::File;
+use inkayaku_core::constants::Piece;
+use inkayaku_core::constants::Square;
+use inkayaku_core::fen::{Fen, FenParseError};
 
 use crate::{mask_and_shift_from_lowest_one_bit, opposite_color, piece_to_string, square_to_string};
 #[allow(clippy::wildcard_imports)]
@@ -1707,8 +1707,8 @@ mod tests {
     use rand::prelude::{SliceRandom, StdRng};
     use rand::SeedableRng;
 
-    use marvk_chess_core::constants::Piece;
-    use marvk_chess_core::fen::Fen;
+    use inkayaku_core::constants::Piece;
+    use inkayaku_core::fen::Fen;
 
     use crate::board::Bitboard;
     use crate::board::constants::PieceBits;

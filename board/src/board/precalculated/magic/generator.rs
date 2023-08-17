@@ -4,9 +4,9 @@ use std::collections::HashSet;
 use rand::{Rng, SeedableRng};
 use rand::rngs::StdRng;
 
-use marvk_chess_core::constants::Direction;
-use marvk_chess_core::constants::Piece;
-use marvk_chess_core::constants::Square;
+use inkayaku_core::constants::Direction;
+use inkayaku_core::constants::Piece;
+use inkayaku_core::constants::Square;
 use crate::board::precalculated::magic::magic_hash;
 
 #[derive(Debug, Eq, PartialEq)]
@@ -210,8 +210,8 @@ mod tests {
     use std::env;
     use std::fs::write;
 
-    use marvk_chess_core::constants::Piece;
-    use marvk_chess_core::constants::Square;
+    use inkayaku_core::constants::Piece;
+    use inkayaku_core::constants::Square;
     use crate::board::precalculated::magic::generator::{GeneratorConfiguration, ConfigurationGenerator};
 
     fn generate_magic_hashes_for(piece: Piece) -> [u64; 64] {
