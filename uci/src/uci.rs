@@ -293,9 +293,7 @@ pub enum UciTxCommand {
     Debug { message: String },
 }
 
-impl UciCommand {}
-
-pub trait Engine {
+pub trait UciEngine {
     fn accept(&mut self, command: UciCommand);
 }
 

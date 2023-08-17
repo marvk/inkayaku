@@ -1,7 +1,7 @@
 use marvk_chess_board::constants::ZobristHash;
 
-use crate::inkayaku::search::ValuedMove;
-use crate::inkayaku::table::HashTable;
+use crate::engine::search::ValuedMove;
+use crate::engine::table::HashTable;
 
 pub enum NodeType {
     Exact,

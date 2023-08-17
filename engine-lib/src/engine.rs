@@ -3,15 +3,15 @@ use std::sync::mpsc::{channel, Receiver, Sender};
 use std::thread;
 use std::thread::JoinHandle;
 
-use marvk_chess_uci::{Engine, ProtectionMessage, UciCommand, UciTx};
+use marvk_chess_uci::{UciEngine, ProtectionMessage, UciCommand, UciTx};
 use SearchMessage::{UciGo, UciPositionFrom, UciUciNewGame};
 use UciCommand::{IsReady, PonderHit, PositionFrom, Quit, Register, RegisterLater, SetDebug, SetOption, SetOptionValue, Stop, Uci, UciNewGame};
 use UciCommand::Go as GoCommand;
 
-use crate::inkayaku::heuristic::simple::SimpleHeuristic;
-use crate::inkayaku::move_order::MvvLvaMoveOrder;
-use crate::inkayaku::search::{EngineOptions, Search, SearchMessage};
-use crate::inkayaku::search::SearchMessage::{UciDebug, UciPonderHit, UciQuit, UciStop};
+use crate::engine::heuristic::simple::SimpleHeuristic;
+use crate::engine::move_order::MvvLvaMoveOrder;
+use crate::engine::search::{EngineOptions, Search, SearchMessage};
+use crate::engine::search::SearchMessage::{UciDebug, UciPonderHit, UciQuit, UciStop};
 
 mod heuristic;
 mod move_order;
@@ -20,14 +20,14 @@ mod metrics;
 mod search;
 mod table;
 
-pub struct Inkayaku<T: UciTx + Send + Sync + 'static> {
+pub struct Engine<T: UciTx + Send + Sync + 'static> {
     uci_tx: Arc<T>,
     debug: bool,
     search_tx: Sender<SearchMessage>,
     search_handle: Option<JoinHandle<()>>,
 }
 
-impl<T: UciTx + Send + Sync + 'static> Inkayaku<T> {
+impl<T: UciTx + Send + Sync + 'static> Engine<T> {
     pub fn new(uci_tx: Arc<T>, debug: bool) -> Self {
         let (search_tx, search_rx) = channel();
         let search_handle = Self::start_search_thread(search_rx, uci_tx.clone(), debug);
@@ -42,7 +42,7 @@ impl<T: UciTx + Send + Sync + 'static> Inkayaku<T> {
     }
 }
 
-impl<T: UciTx + Send + Sync + 'static> Engine for Inkayaku<T> {
+impl<T: UciTx + Send + Sync + 'static> UciEngine for Engine<T> {
     #[allow(unused_variables)]
     #[allow(clippy::unwrap_used)]
     fn accept(&mut self, command: UciCommand) {
@@ -100,15 +100,15 @@ mod test {
     use std::sync::mpsc::channel;
 
     use marvk_chess_core::fen::Fen;
-    use marvk_chess_uci::{Engine, Go, Score, UciCommand, UciMove, UciTxCommand};
+    use marvk_chess_uci::{UciEngine, Go, Score, UciCommand, UciMove, UciTxCommand};
     use marvk_chess_uci::command::CommandUciTx;
 
-    use crate::inkayaku::Inkayaku;
+    use crate::engine::Engine;
 
     #[test]
     fn test_threefold() {
         let (tx, rx) = channel();
-        let mut engine = Inkayaku::new(Arc::new(CommandUciTx::new(tx)), false);
+        let mut engine = Engine::new(Arc::new(CommandUciTx::new(tx)), false);
         engine.accept(UciCommand::UciNewGame);
 
         let wait_for_best_move = || {
@@ -192,7 +192,7 @@ mod test {
 
     fn _test_threefold(moves: Vec<&str>, fen: Fen, move_to_draw: &str) {
         let (tx, rx) = channel();
-        let mut engine = Inkayaku::new(Arc::new(CommandUciTx::new(tx)), false);
+        let mut engine = Engine::new(Arc::new(CommandUciTx::new(tx)), false);
 
         engine.accept(UciCommand::UciNewGame);
         let uci_moves = moves.into_iter().map(|s| UciMove::parse(s).unwrap()).collect();

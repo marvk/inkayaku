@@ -13,12 +13,12 @@ use futures_util::StreamExt;
 use marvk_chess_board::Bitboard;
 use marvk_chess_core::constants::Color;
 use marvk_chess_core::fen::Fen;
-use marvk_chess_engine_lib::inkayaku::Inkayaku;
+use marvk_chess_engine_lib::engine::Engine;
 use marvk_chess_lichess_api::api::bot_event_response::ChallengeEventDeclineReason;
 use marvk_chess_lichess_api::api::bot_game_state_response::{BotGameState, Clock, GameStateHolder};
 use marvk_chess_lichess_api::api::BotApi;
 use marvk_chess_lichess_api::api::response::{GameStatusKey, SpeedKey, VariantFull, VariantKey};
-use marvk_chess_uci::{Engine, Go, UciCommand, UciMove, UciTxCommand};
+use marvk_chess_uci::{UciEngine, Go, UciCommand, UciMove, UciTxCommand};
 use marvk_chess_uci::command::CommandUciTx;
 
 
@@ -26,7 +26,7 @@ pub struct GameThread {
     bot_id: String,
     game_id: String,
     api: Arc<BotApi>,
-    engine: RefCell<Inkayaku<CommandUciTx>>,
+    engine: RefCell<Engine<CommandUciTx>>,
     game_state: RefCell<GameState>,
 }
 
@@ -144,15 +144,15 @@ impl GameThread {
         self.game_state.borrow().self_color().index == bitboard.turn
     }
 
-    fn engine(&self) -> RefMut<Inkayaku<CommandUciTx>> {
+    fn engine(&self) -> RefMut<Engine<CommandUciTx>> {
         self.engine.borrow_mut()
     }
 
-    fn spawn_engine(api: Arc<BotApi>, game_id: &str) -> Inkayaku<CommandUciTx> {
+    fn spawn_engine(api: Arc<BotApi>, game_id: &str) -> Engine<CommandUciTx> {
         let (tx, rx): (Sender<UciTxCommand>, _) = channel();
         Self::spawn_engine_rx_thread(rx, api, game_id);
 
-        Inkayaku::new(Arc::new(CommandUciTx::new(tx)), false)
+        Engine::new(Arc::new(CommandUciTx::new(tx)), false)
     }
 
     fn spawn_engine_rx_thread(rx: Receiver<UciTxCommand>, api: Arc<BotApi>, game_id: &str) {

@@ -3,7 +3,7 @@ extern crate core;
 use marvk_chess_board::{Move, MoveStructs};
 use marvk_chess_uci::UciMove;
 
-pub mod inkayaku;
+pub mod engine;
 
 fn move_into_uci_move(mv: Move) -> UciMove {
     let MoveStructs { from_square, to_square, promote_to, .. } = MoveStructs::from(mv);

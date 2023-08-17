@@ -10,13 +10,13 @@ use marvk_chess_core::fen::Fen;
 use marvk_chess_uci::{Go, Info, UciMove, UciTx};
 use SearchMessage::{UciDebug, UciGo, UciPonderHit, UciPositionFrom, UciQuit, UciStop, UciUciNewGame};
 
-use crate::inkayaku::heuristic::Heuristic;
-use crate::inkayaku::metrics::{Metrics, MetricsService};
-use crate::inkayaku::move_order::MoveOrder;
-use crate::inkayaku::table::killer::KillerTable;
-use crate::inkayaku::table::transposition::{HashMapTranspositionTable, TranspositionTable, TtEntry};
-use crate::inkayaku::table::transposition::NodeType::{Exact, Lowerbound, Upperbound};
-use crate::inkayaku::zobrist_history::ZobristHistory;
+use crate::engine::heuristic::Heuristic;
+use crate::engine::metrics::{Metrics, MetricsService};
+use crate::engine::move_order::MoveOrder;
+use crate::engine::table::killer::KillerTable;
+use crate::engine::table::transposition::{HashMapTranspositionTable, TranspositionTable, TtEntry};
+use crate::engine::table::transposition::NodeType::{Exact, Lowerbound, Upperbound};
+use crate::engine::zobrist_history::ZobristHistory;
 use crate::move_into_uci_move;
 
 pub struct Search<T: UciTx, H: Heuristic, M: MoveOrder> {
@@ -689,7 +689,7 @@ enum PvContinuationError {
 mod test {
     use marvk_chess_board::constants::{BLACK, WHITE};
 
-    use crate::inkayaku::search::calculate_heuristic_factor;
+    use crate::engine::search::calculate_heuristic_factor;
 
     #[test]
     fn test_heuristic_factor() {

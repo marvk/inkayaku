@@ -2,8 +2,8 @@ use std::cell::RefCell;
 use std::io::stdin;
 use std::sync::Arc;
 
-use marvk_chess_engine_lib::inkayaku::Inkayaku;
-use marvk_chess_uci::{Engine, UciTx};
+use marvk_chess_engine_lib::engine::Engine;
+use marvk_chess_uci::{UciEngine, UciTx};
 use marvk_chess_uci::console::{ConsoleUciRx, ConsoleUciTx};
 use marvk_chess_uci::console::ConsoleUciRxError::CommandParseError;
 use marvk_chess_uci::parser::ParserError::UnknownCommand;
@@ -18,7 +18,7 @@ fn main() {
     let tx = Arc::new(ConsoleUciTx::new(print_ln, print_err, DEBUG_DEFAULT));
     if DEBUG_DEFAULT { tx.debug("DEBUG ENABLED") }
     print_ln("Inkayaku by Marvin Kuhnke (see https://github.com/marvk/rust-chess)");
-    let engine = RefCell::new(Inkayaku::new(tx.clone(), DEBUG_DEFAULT));
+    let engine = RefCell::new(Engine::new(tx.clone(), DEBUG_DEFAULT));
     let on_command = |command_result| {
         match command_result {
             Ok(command) => {

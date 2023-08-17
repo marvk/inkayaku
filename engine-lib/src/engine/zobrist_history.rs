@@ -46,7 +46,7 @@ impl Default for ZobristHistory {
 
 #[cfg(test)]
 mod test {
-    use crate::inkayaku::zobrist_history::ZobristHistory;
+    use crate::engine::zobrist_history::ZobristHistory;
 
     #[test]
     fn test() {
