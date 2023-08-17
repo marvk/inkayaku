@@ -3,7 +3,9 @@ extern crate core;
 use inkayaku_board::{Move, MoveStructs};
 use inkayaku_uci::UciMove;
 
-pub mod engine;
+mod engine;
+
+pub use engine::*;
 
 fn move_into_uci_move(mv: Move) -> UciMove {
     let MoveStructs { from_square, to_square, promote_to, .. } = MoveStructs::from(mv);

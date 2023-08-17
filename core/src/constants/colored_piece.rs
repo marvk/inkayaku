@@ -1,4 +1,3 @@
-use std::process::id;
 use crate::constants::color::Color;
 use crate::constants::piece::Piece;
 
@@ -47,7 +46,7 @@ impl ColoredPiece {
         Self::VALUES[Self::idx(color_index, piece_index)]
     }
 
-    pub fn from_structs(color: Color, piece: Piece) -> Option<ColoredPiece> {
+    pub fn from_structs(color: Color, piece: Piece) -> Option<Self> {
         Self::from_indices(color.index as usize, piece.index as usize)
     }
 

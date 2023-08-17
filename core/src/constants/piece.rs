@@ -19,19 +19,19 @@ impl Piece {
 
     pub const VALUES: [Self; 6] = [Self::PAWN, Self::KNIGHT, Self::BISHOP, Self::ROOK, Self::QUEEN, Self::KING];
 
-    pub fn to_color(&self, color: &Color) -> ColoredPiece {
-        match *color {
-            Color::WHITE => self.to_white(),
-            Color::BLACK => self.to_black(),
+    pub const fn to_color(&self, color: Color) -> ColoredPiece {
+        match color.index {
+            0 => self.to_white(),
+            1 => self.to_black(),
             _ => panic!(),
         }
     }
 
-    pub fn to_black(&self) -> ColoredPiece {
+    pub const fn to_black(&self) -> ColoredPiece {
         ColoredPiece::from_indices_unchecked(Color::BLACK.index as usize, self.index as usize)
     }
 
-    pub fn to_white(&self) -> ColoredPiece {
+    pub const fn to_white(&self) -> ColoredPiece {
         ColoredPiece::from_indices_unchecked(Color::WHITE.index as usize, self.index as usize)
     }
 
@@ -47,6 +47,7 @@ impl Piece {
         }
     }
 
+    #[allow(clippy::unwrap_used)]
     pub fn from_char_unchecked(c: char) -> Self {
         Self::from_char(c).unwrap()
     }

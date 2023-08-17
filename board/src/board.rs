@@ -1428,7 +1428,7 @@ impl Bitboard {
         };
         let capture = if to_piece.is_some() { "x" } else { "" };
         let target_square = to_square.fen;
-        let promotion_piece = promote_to.map(|p| p.to_color(&Color::WHITE));
+        let promotion_piece = promote_to.map(|p| p.to_color(Color::WHITE));
         let promotion_piece = promotion_piece.map_or_else(String::new, |p| format!("={}", p.fen));
         let check_str = if is_mate { "#" } else if is_check { "+" } else { "" };
 

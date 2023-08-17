@@ -122,6 +122,7 @@ impl Square {
         Self::from_indices(file, rank)
     }
 
+    #[allow(clippy::unwrap_used)]
     pub fn from_chars_unchecked(file: char, rank: char) -> Self {
         Self::from_chars(file, rank).unwrap()
     }
@@ -134,7 +135,7 @@ impl Square {
         }
     }
 
-    pub fn from_indices_unchecked(file_index: usize, rank_index: usize) -> Self {
+    pub const fn from_indices_unchecked(file_index: usize, rank_index: usize) -> Self {
         Self::from_index_unchecked(to_square_index_from_indices(file_index, rank_index))
     }
 
@@ -212,7 +213,7 @@ impl Square {
         Self::VALUES[index]
     }
 
-    pub fn from_structs(file: File, rank: Rank) -> Self {
+    pub const fn from_structs(file: File, rank: Rank) -> Self {
         Self::from_indices_unchecked(file.index as usize, rank.index as usize)
     }
 

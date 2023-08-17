@@ -2,7 +2,7 @@ use std::cell::RefCell;
 use std::io::stdin;
 use std::sync::Arc;
 
-use inkayaku_engine_core::engine::Engine;
+use inkayaku_engine_core::Engine;
 use inkayaku_uci::{UciEngine, UciTx};
 use inkayaku_uci::console::{ConsoleUciRx, ConsoleUciTx};
 use inkayaku_uci::console::ConsoleUciRxError::CommandParseError;

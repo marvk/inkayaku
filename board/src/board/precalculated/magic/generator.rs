@@ -10,7 +10,7 @@ use inkayaku_core::constants::Square;
 use crate::board::precalculated::magic::magic_hash;
 
 #[derive(Debug, Eq, PartialEq)]
-pub(crate) struct GeneratorConfiguration {
+struct GeneratorConfiguration {
     pub mask: u64,
     pub magic: u64,
     pub hash_mask: u64,
@@ -19,7 +19,7 @@ pub(crate) struct GeneratorConfiguration {
 }
 
 impl GeneratorConfiguration {
-    pub(crate) const fn new(mask: u64, magic: u64, hash_mask: u64, hash_shift: u32, attacks: Vec<u64>) -> Self {
+    pub const fn new(mask: u64, magic: u64, hash_mask: u64, hash_shift: u32, attacks: Vec<u64>) -> Self {
         Self { mask, magic, hash_mask, hash_shift, attacks }
     }
 
@@ -36,7 +36,7 @@ impl GeneratorConfiguration {
     }
 }
 
-pub(crate) struct ConfigurationGenerator {
+struct ConfigurationGenerator {
     square: Square,
     directions: [Direction; 4],
     mask: u64,
@@ -119,7 +119,7 @@ impl ConfigurationGenerator {
         )
     }
 
-    pub fn generate_all_attacks(&self) -> GeneratorConfiguration {
+    fn generate_all_attacks(&self) -> GeneratorConfiguration {
         self.generate_all_attacks_with_magic(self.find_magic())
     }
 

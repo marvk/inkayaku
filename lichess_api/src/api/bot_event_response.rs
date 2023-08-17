@@ -206,11 +206,11 @@ impl FromStr for ChallengeEventRule {
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s.to_lowercase().as_str() {
-            "noabort" => Ok(ChallengeEventRule::NoAbort),
-            "norematch" => Ok(ChallengeEventRule::NoRematch),
-            "nogivetime" => Ok(ChallengeEventRule::NoGiveTime),
-            "noclaimwin" => Ok(ChallengeEventRule::NoClaimWin),
-            "noearlydraw" => Ok(ChallengeEventRule::NoEarlyDraw),
+            "noabort" => Ok(Self::NoAbort),
+            "norematch" => Ok(Self::NoRematch),
+            "nogivetime" => Ok(Self::NoGiveTime),
+            "noclaimwin" => Ok(Self::NoClaimWin),
+            "noearlydraw" => Ok(Self::NoEarlyDraw),
             _ => Err(())
         }
     }

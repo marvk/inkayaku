@@ -13,7 +13,7 @@ use futures_util::StreamExt;
 use inkayaku_board::Bitboard;
 use inkayaku_core::constants::Color;
 use inkayaku_core::fen::Fen;
-use inkayaku_engine_core::engine::Engine;
+use inkayaku_engine_core::Engine;
 use inkayaku_lichess_api::api::bot_event_response::ChallengeEventDeclineReason;
 use inkayaku_lichess_api::api::bot_game_state_response::{BotGameState, Clock, GameStateHolder};
 use inkayaku_lichess_api::api::BotApi;
