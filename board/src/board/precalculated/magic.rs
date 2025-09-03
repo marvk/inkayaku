@@ -32,7 +32,9 @@ impl MagicConfiguration {
 
     #[inline(always)]
     unsafe fn get_attacks(&self, occupancy: u64) -> u64 {
-        *self.attacks.get_unchecked(self.hash(occupancy))
+        unsafe {
+            *self.attacks.get_unchecked(self.hash(occupancy))
+        }
     }
 
     #[inline(always)]

@@ -52,6 +52,7 @@ impl Zobrist {
 
 #[cfg(test)]
 mod test {
+    use std::array::from_fn;
     use std::collections::HashSet;
 
     use rand::{Rng, SeedableRng};
@@ -76,7 +77,7 @@ mod test {
 
         let mut gen_single = || -> ZobristHash {
             loop {
-                let next = rng.gen();
+                let next = rng.random();
                 if hashes.insert(next) {
                     return next;
                 }
@@ -84,11 +85,7 @@ mod test {
         };
 
         let mut gen_64 = || -> [ZobristHash; 64] {
-            let mut result = [0; 64];
-            for i in 0..64 {
-                result[i] = gen_single();
-            }
-            result
+            from_fn(|_| gen_single())
         };
 
         let square_piece_hashes = [

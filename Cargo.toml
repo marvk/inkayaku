@@ -1,8 +1,9 @@
 [profile.release]
-debug = true
+codegen-units = 1
+lto = "fat"
 
 [workspace]
-
+resolver = "3"
 members = [
     "board_perft",
     "board",

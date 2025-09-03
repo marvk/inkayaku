@@ -199,7 +199,7 @@ impl<T: Rng> MagicGenerator<T> {
     }
 
     fn generate_magic_candidate(&self) -> u64 {
-        let x: [u64; 4] = self.rng.borrow_mut().gen();
+        let x: [u64; 4] = self.rng.borrow_mut().random();
 
         x[0] & x[1] & x[2]
     }

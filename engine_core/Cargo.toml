@@ -1,12 +1,12 @@
 [package]
 name = "inkayaku_engine_core"
 version = "0.1.0"
-edition = "2021"
+edition = "2024"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-rand = "0.8.5"
+rand = "0.9.2"
 nohash-hasher = "0.2.0"
 inkayaku_board = { path = "../board" }
 inkayaku_core = { path = "../core" }
